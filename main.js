@@ -135,7 +135,7 @@ let state = {
     hasClaimedFreeDrone: false,
     memo: Math.floor(Math.random() * 9000000000) + 1000000000,
     history: { deposits: [], withdrawals: [], conversions: [] },
-    referrals: { invitedBy: null, level1Count: 0, level2Count: 0, totalProfit: 0 } // Подготовлено для Mongoose
+    referrals: { invitedBy: null, level1Count: 0, level2Count: 0, totalProfit: 0 }
 };
 
 let animationFrameId;
@@ -173,36 +173,48 @@ const els = {
 
 // Initialization
 document.addEventListener('DOMContentLoaded', async () => {
-    initTelegramUser();
-    setupAudio();
-    createStarfield();
-    setupLanguageSwitcher();
-    await loadState();
-    setupNavigation();
-    setupWallet();
-    setupReferrals();
-    updateNavIndicators();
-    renderShop();
-    renderHangar();
-    updateRatesDisplay();
-    initAirdrop();
-    
-    initThreeJS();
-    renderOrbits();
-    
-    els.btnClaim.addEventListener('click', claimTokens);
-    
-    if (state.lastUpdate > Date.now()) state.lastUpdate = Date.now();
-    
-    lastFrameTime = Date.now();
-    gameLoop();
-    
-    setInterval(() => {
-        saveState();
+    try {
+        initTelegramUser();
+        setupAudio();
+        createStarfield();
+        setupLanguageSwitcher();
+        await loadState();
+        setupNavigation();
+        setupWallet();
+        setupReferrals();
+        updateNavIndicators();
+        renderShop();
         renderHangar();
-    }, 10000);
-    
-    isInitialized = true;
+        updateRatesDisplay();
+        initAirdrop();
+        
+        try {
+            initThreeJS();
+            renderOrbits();
+        } catch(e) { console.error("3D Render failed", e); }
+        
+        if (els.btnClaim) els.btnClaim.addEventListener('click', claimTokens);
+        
+        if (state.lastUpdate > Date.now()) state.lastUpdate = Date.now();
+        
+        lastFrameTime = Date.now();
+        gameLoop();
+        
+        setInterval(() => {
+            saveState();
+            renderHangar();
+        }, 10000);
+        
+        isInitialized = true;
+    } catch (err) {
+        console.error("Initialization error:", err);
+        // Fallback: hide loading screen if something crashes so it's not permanently stuck
+        const overlay = document.getElementById('loading-overlay');
+        if (overlay) {
+            overlay.classList.add('opacity-0');
+            setTimeout(() => overlay.remove(), 500);
+        }
+    }
 });
 
 // Toast Utility
@@ -234,6 +246,7 @@ function generateId() {
 
 // Background effect
 function createStarfield() {
+    if(!els.starfield) return;
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
     canvas.width = window.innerWidth;
@@ -267,86 +280,107 @@ function createStarfield() {
 
 // Storage
 async function loadState() {
+    const loadingText = document.getElementById('loading-text');
+    let wakeUpInterval;
+    
     try {
+        // 1. Get local persistent data (memo, history, lastUpdate)
         const raw = await miniappsAI.storage.getItem('exoMinerState');
         if (raw) {
             const parsed = JSON.parse(raw);
-            
-            state.balance = parsed.balance || 0;
-            state.miningBalance = parsed.miningBalance || 0;
-            state.unclaimed = parsed.unclaimed || 0;
-            state.currencyVersion = parsed.currencyVersion || 1;
+            if (!window.tgUserFound && parsed.memo) {
+                state.memo = parsed.memo;
+            }
             state.lastUpdate = parsed.lastUpdate || Date.now();
             state.lastAirdropTime = parsed.lastAirdropTime || 0;
+            state.history = parsed.history || { deposits: [], withdrawals: [], conversions: [] };
+        } else {
+            await miniappsAI.storage.setItem('exoMinerState', JSON.stringify(state));
+        }
+
+        if (els.depositMemo) els.depositMemo.textContent = state.memo;
+
+        // 2. STRICT MONGO BACKEND FETCH
+        wakeUpInterval = setTimeout(() => {
+            if(loadingText) loadingText.textContent = window.miniappI18n ? window.miniappI18n.t('app.loading_wakeup') : "Пробуждаем сервер базы данных (Render)... Это может занять до 50 секунд.";
+        }, 3000);
+        
+        const res = await fetch(`${BACKEND_URL}/api/user/${state.memo}`);
+        
+        if (res.status === 404) {
+            console.log("User not found in DB, starting as new user.");
+            // Will use the default empty state initialized above
+        } else if (!res.ok) {
+            throw new Error(`Server error: ${res.status}`);
+        } else {
+            const data = await res.json();
             
-            // Migrate drones
-            state.drones = parsed.drones || state.drones;
+            // 3. APPLY MONGO DATA AS ABSOLUTE TRUTH
+            state.balance = data.depositBalance !== undefined ? data.depositBalance : 0;
+            state.miningBalance = data.miningBalance !== undefined ? data.miningBalance : 0;
+            
+            if (data.drones && data.drones.length > 0) {
+                state.drones = data.drones;
+                state.hasClaimedFreeDrone = state.drones.some(d => d.type === 'FREE');
+            } else {
+                state.drones = [];
+                state.hasClaimedFreeDrone = false;
+            }
+            
+            if (!state.referrals) state.referrals = {};
+            state.referrals.invitedBy = data.referrerTgId;
+            state.referrals.level1Count = data.referralsLvl1Count || 0;
+            state.referrals.level2Count = data.referralsLvl2Count || 0;
+            state.referrals.totalProfit = data.referralProfit || 0;
+        }
+
+        // 4. Offline mining calculation based on accurate server data
+        const now = Date.now();
+        const timeDiff = Math.min(now - state.lastUpdate, 24 * 60 * 60 * 1000);
+        if (timeDiff > 0) {
+            const dt = timeDiff / 1000;
+            let activeRateSec = 0;
             state.drones.forEach(d => {
-                if (!d.acquiredAt) {
-                    d.acquiredAt = Date.now() - (Math.random() * 30 * 24 * 3600 * 1000);
+                const stats = DRONES[d.type];
+                if (!stats) return;
+                let isActive = true;
+                if (stats.maxDays) {
+                    const daysActive = (now - d.acquiredAt) / 86400000;
+                    if (daysActive >= stats.maxDays) isActive = false;
                 }
-                if (d.minedAmount === undefined) {
-                    d.minedAmount = 0;
+                if (stats.maxMined && (d.minedAmount || 0) >= stats.maxMined) isActive = false;
+                if (isActive) {
+                    d.minedAmount = (d.minedAmount || 0) + (stats.rate * dt);
+                    activeRateSec += stats.rate;
                 }
             });
-            
-            if (parsed.hasClaimedFreeDrone !== undefined) {
-                state.hasClaimedFreeDrone = parsed.hasClaimedFreeDrone;
-            } else {
-                state.hasClaimedFreeDrone = state.drones.length > 0;
-            }
-            
-            state.memo = parsed.memo || Math.floor(Math.random() * 9000000000) + 1000000000;
-            state.history = parsed.history || { deposits: [], withdrawals: [], conversions: [] };
-            
-            // FETCH FROM BACKEND
-            try {
-                const res = await fetch(`${BACKEND_URL}/api/user/${state.memo}`);
-                if (res.ok) {
-                    const data = await res.json();
-                    state.balance = data.depositBalance !== undefined ? data.depositBalance : state.balance;
-                    state.miningBalance = data.miningBalance !== undefined ? data.miningBalance : state.miningBalance;
-                    if (data.drones && data.drones.length > 0) state.drones = data.drones;
-                    
-                    if (!state.referrals) state.referrals = {};
-                    state.referrals.invitedBy = data.referrerTgId;
-                    state.referrals.level1Count = data.referralsLvl1Count || 0;
-                    state.referrals.level2Count = data.referralsLvl2Count || 0;
-                    state.referrals.totalProfit = data.referralProfit || 0;
-                }
-            } catch(e) { console.error("Backend fetch error:", e); }
-            
-            // Calculate offline earnings (max 24 hours)
-            const now = Date.now();
-            const timeDiff = Math.min(now - state.lastUpdate, 24 * 60 * 60 * 1000);
-            if (timeDiff > 0) {
-                const dt = timeDiff / 1000;
-                let activeRateSec = 0;
-                
-                state.drones.forEach(d => {
-                    const stats = DRONES[d.type];
-                    if (!stats) return;
-                    let isActive = true;
-                    if (stats.maxDays) {
-                        const daysActive = (now - d.acquiredAt) / 86400000;
-                        if (daysActive >= stats.maxDays) isActive = false;
-                    }
-                    if (stats.maxMined && (d.minedAmount || 0) >= stats.maxMined) {
-                        isActive = false;
-                    }
-                    if (isActive) {
-                        const minedNow = stats.rate * dt;
-                        d.minedAmount = (d.minedAmount || 0) + minedNow;
-                        activeRateSec += stats.rate;
-                    }
-                });
-                state.unclaimed += dt * activeRateSec;
-            }
-            state.lastUpdate = now;
+            state.unclaimed += dt * activeRateSec;
         }
+        state.lastUpdate = now;
+        
+        clearTimeout(wakeUpInterval);
+        
+        // 5. Hide Loading Screen
+        const overlay = document.getElementById('loading-overlay');
+        if (overlay) {
+            overlay.classList.add('opacity-0');
+            setTimeout(() => overlay.remove(), 500);
+        }
+        
         updateBalancesUI();
+        
+        if (isInitialized) {
+            renderHangar();
+            renderReferrals();
+            updateRatesDisplay();
+            renderOrbits();
+        }
+        
     } catch (e) {
-        console.error("Failed to load state", e);
+        console.error("Backend fetch error:", e);
+        clearTimeout(wakeUpInterval);
+        if(loadingText) loadingText.textContent = window.miniappI18n ? window.miniappI18n.t('app.loading_error') : "Ошибка соединения с сервером базы данных. Попробуйте перезагрузить.";
+        // Leave loading screen visible so user knows it failed
     }
 }
 
@@ -407,6 +441,7 @@ function initTelegramUser() {
     const usernameEl = document.getElementById('tg-username');
     
     if (user) {
+        window.tgUserFound = true;
         if (user.photo_url && avatarEl) avatarEl.src = user.photo_url;
         if (nameEl) nameEl.textContent = user.first_name + (user.last_name ? ' ' + user.last_name : '');
         if (usernameEl) {
@@ -603,13 +638,11 @@ function setupAudio() {
     
     btnVolume.addEventListener('click', (e) => {
         e.stopPropagation();
-        volumeDropdown.classList.toggle('hidden');
-        volumeDropdown.classList.toggle('flex');
-        
-        // Try to start on interaction
-        if (!ambient.isPlaying && parseInt(volumeSlider.value) > 0) {
-            ambient.start();
+        if (volumeDropdown) {
+            volumeDropdown.classList.toggle('hidden');
+            volumeDropdown.classList.toggle('flex');
         }
+        if (!ambient.isPlaying && volumeSlider && parseInt(volumeSlider.value) > 0) ambient.start();
     });
     
     document.addEventListener('click', () => {
@@ -619,39 +652,44 @@ function setupAudio() {
         }
     });
     
-    volumeSlider.addEventListener('input', (e) => {
-        const val = parseInt(e.target.value);
-        volumeValue.textContent = val + '%';
-        ambient.setVolume(val / 100);
-    });
+    if (volumeSlider) {
+        volumeSlider.addEventListener('input', (e) => {
+            const val = parseInt(e.target.value);
+            if(volumeValue) volumeValue.textContent = val + '%';
+            ambient.setVolume(val / 100);
+        });
+        
+        volumeSlider.addEventListener('change', (e) => {
+            const val = parseInt(e.target.value);
+            try { miniappsAI.storage.setItem('exoMinerVolume', (val / 100).toString()); } catch(err){}
+        });
+    }
     
-    volumeSlider.addEventListener('change', (e) => {
-        const val = parseInt(e.target.value);
-        miniappsAI.storage.setItem('exoMinerVolume', (val / 100).toString());
-    });
-    
-    miniappsAI.storage.getItem('exoMinerVolume').then(val => {
-        if (val !== null) {
-            const vol = parseFloat(val);
-            volumeSlider.value = vol * 100;
-            volumeValue.textContent = Math.round(vol * 100) + '%';
-            
-            // Wait for user interaction to set actual audio volume
-            const startAudio = () => {
-                ambient.init();
-                ambient.setVolume(vol);
-                if(vol > 0) ambient.start();
-                document.removeEventListener('click', startAudio);
-            };
-            document.addEventListener('click', startAudio);
-        } else {
-            const startAudio = () => {
-                if(parseInt(volumeSlider.value) > 0) ambient.start();
-                document.removeEventListener('click', startAudio);
-            };
-            document.addEventListener('click', startAudio);
-        }
-    });
+    try {
+        miniappsAI.storage.getItem('exoMinerVolume').then(val => {
+            if (val !== null && volumeSlider) {
+                const vol = parseFloat(val);
+                volumeSlider.value = vol * 100;
+                if(volumeValue) volumeValue.textContent = Math.round(vol * 100) + '%';
+                
+                const startAudio = () => {
+                    ambient.init();
+                    ambient.setVolume(vol);
+                    if(vol > 0) ambient.start();
+                    document.removeEventListener('click', startAudio);
+                };
+                document.addEventListener('click', startAudio);
+            } else {
+                const startAudio = () => {
+                    if(volumeSlider && parseInt(volumeSlider.value) > 0) ambient.start();
+                    document.removeEventListener('click', startAudio);
+                };
+                document.addEventListener('click', startAudio);
+            }
+        }).catch(e => console.error("Audio storage error:", e));
+    } catch(err) {
+        console.error("Audio setup error:", err);
+    }
 }
 
 // Core Logic
@@ -709,7 +747,7 @@ function gameLoop() {
         state.unclaimed += activeRateSec * dt;
         state.lastUpdate = now;
         
-        els.miningCounter.textContent = state.unclaimed.toFixed(6);
+        if (els.miningCounter) els.miningCounter.textContent = state.unclaimed.toFixed(6);
     } else if (dt >= 1) {
         state.lastUpdate = now;
     }
@@ -736,8 +774,10 @@ function gameLoop() {
 function claimTokens() {
     if (state.unclaimed < 0.0001) return;
     
-    els.btnClaim.classList.add('scale-95', 'opacity-80');
-    setTimeout(() => els.btnClaim.classList.remove('scale-95', 'opacity-80'), 150);
+    if (els.btnClaim) {
+        els.btnClaim.classList.add('scale-95', 'opacity-80');
+        setTimeout(() => els.btnClaim.classList.remove('scale-95', 'opacity-80'), 150);
+    }
     
     state.miningBalance += state.unclaimed;
     state.unclaimed = 0;
@@ -823,8 +863,8 @@ function updateAirdropUI() {
         const diff = 3600000 - (now - lastTime);
         
         if (diff <= 0) {
-            statusEl.textContent = window.miniappI18n.t('app.airdrop_desc') || 'Смотреть рекламу (0.001 USDT)';
-            actionEl.textContent = window.miniappI18n.t('app.airdrop_btn') || 'Смотреть';
+            statusEl.textContent = window.miniappI18n ? window.miniappI18n.t('app.airdrop_desc') : 'Смотреть рекламу (0.001 USDT)';
+            actionEl.textContent = window.miniappI18n ? window.miniappI18n.t('app.airdrop_btn') : 'Смотреть';
             actionEl.className = 'bg-indigo-600 text-white text-[10px] font-bold px-3 py-1.5 rounded-lg uppercase tracking-wider shrink-0 transition-colors duration-300';
             btnAirdrop.style.opacity = '1';
             btnAirdrop.style.pointerEvents = 'auto';
@@ -850,7 +890,7 @@ function renderWalletHistory() {
         
         const items = state.history[type] || [];
         if(items.length === 0) {
-            container.innerHTML = `<div class="text-center text-sm text-gray-600 py-4">${window.miniappI18n.t('app.history_empty') || 'История пуста'}</div>`;
+            container.innerHTML = `<div class="text-center text-sm text-gray-600 py-4">${window.miniappI18n ? window.miniappI18n.t('app.history_empty') : 'История пуста'}</div>`;
             return;
         }
         
@@ -913,7 +953,7 @@ function setupWallet() {
             const targetId = e.currentTarget.dataset.target;
             const text = document.getElementById(targetId).textContent;
             navigator.clipboard.writeText(text).then(() => {
-                showToast(window.miniappI18n.t('app.copied') || 'Скопировано!');
+                showToast(window.miniappI18n ? window.miniappI18n.t('app.copied') : 'Скопировано!');
             });
         });
     });
@@ -952,7 +992,7 @@ function setupWallet() {
             const input = document.getElementById('deposit-amount-input');
             const amount = parseFloat(input.value);
             if (isNaN(amount) || amount <= 0) {
-                showToast(window.miniappI18n.t('app.invalid_amount') || 'Некорректная сумма');
+                showToast(window.miniappI18n ? window.miniappI18n.t('app.invalid_amount') : 'Некорректная сумма');
                 return;
             }
             
@@ -971,7 +1011,7 @@ function setupWallet() {
                     input.value = '';
                     saveState();
                     renderWalletHistory();
-                    showToast(window.miniappI18n.t('app.deposit_created') || 'Заявка отправлена. Ожидайте зачисления.');
+                    showToast(window.miniappI18n ? window.miniappI18n.t('app.deposit_created') : 'Заявка отправлена. Ожидайте зачисления.');
                 } else {
                     showToast('Ошибка при создании заявки');
                 }
@@ -997,14 +1037,14 @@ function setupWallet() {
             const addressInput = document.getElementById('withdraw-wallet-address-input');
             const address = addressInput ? addressInput.value.trim() : '';
             if (!address || address.length < 10) {
-                showToast(window.miniappI18n.t('app.enter_wallet_address') || 'Введите адрес кошелька');
+                showToast(window.miniappI18n ? window.miniappI18n.t('app.enter_wallet_address') : 'Введите адрес кошелька');
                 return;
             }
 
             const input = document.getElementById('withdraw-amount');
             const amount = parseFloat(input.value);
             if (isNaN(amount) || amount <= 0 || amount > state.miningBalance) {
-                showToast(window.miniappI18n.t('app.invalid_amount') || 'Некорректная сумма');
+                showToast(window.miniappI18n ? window.miniappI18n.t('app.invalid_amount') : 'Некорректная сумма');
                 return;
             }
             const btn = document.getElementById('btn-withdraw-submit');
@@ -1025,7 +1065,7 @@ function setupWallet() {
                     saveState();
                     updateBalancesUI();
                     renderWalletHistory();
-                    showToast(window.miniappI18n.t('app.withdraw_created') || 'Заявка на вывод создана');
+                    showToast(window.miniappI18n ? window.miniappI18n.t('app.withdraw_created') : 'Заявка на вывод создана');
                 } else {
                     const err = await res.json();
                     showToast(err.error || 'Ошибка вывода');
@@ -1085,7 +1125,6 @@ function setupWallet() {
     }
 
     renderWalletHistory();
-
 }
 
 // Referrals
@@ -1116,7 +1155,7 @@ function setupReferrals() {
         btnCopy.addEventListener('click', () => {
             const link = updateRefLink();
             navigator.clipboard.writeText(link).then(() => {
-                showToast(window.miniappI18n.t('app.copied') || 'Скопировано!');
+                showToast(window.miniappI18n ? window.miniappI18n.t('app.copied') : 'Скопировано!');
             });
         });
     }
@@ -1125,7 +1164,7 @@ function setupReferrals() {
     if (btnShare) {
         btnShare.addEventListener('click', () => {
             const link = updateRefLink();
-            const text = window.miniappI18n.t('app.ref_share_text') || 'Присоединяйся и майни USDT!';
+            const text = window.miniappI18n ? window.miniappI18n.t('app.ref_share_text') : 'Присоединяйся и майни USDT!';
             const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}`;
             
             if (window.Telegram?.WebApp?.openTelegramLink) {
@@ -1149,7 +1188,7 @@ function setupReferrals() {
             
             const list = document.getElementById('ref-list');
             if (list) {
-                list.innerHTML = `<span class="text-sm text-gray-500">${window.miniappI18n.t('app.no_referrals_yet') || 'Пока нет рефералов'}</span>`;
+                list.innerHTML = `<span class="text-sm text-gray-500">${window.miniappI18n ? window.miniappI18n.t('app.no_referrals_yet') : 'Пока нет рефералов'}</span>`;
             }
         });
     });
@@ -1235,11 +1274,11 @@ function renderHangar() {
                     </div>
                     
                     <div class="flex-1 relative z-10 pr-2">
-                        <h3 class="text-xl font-black text-emerald-400 mb-1 drop-shadow-md tracking-wide" data-i18n="app.free_case_title">${window.miniappI18n.t('app.free_case_title') || 'Бесплатный кейс'}</h3>
-                        <p class="text-[11px] text-emerald-100/80 leading-snug mb-3 font-medium" data-i18n="app.free_case_desc">${window.miniappI18n.t('app.free_case_desc') || 'Заберите первого дрона и начните майнить USDT бесплатно.'}</p>
+                        <h3 class="text-xl font-black text-emerald-400 mb-1 drop-shadow-md tracking-wide" data-i18n="app.free_case_title">${window.miniappI18n ? window.miniappI18n.t('app.free_case_title') : 'Бесплатный кейс'}</h3>
+                        <p class="text-[11px] text-emerald-100/80 leading-snug mb-3 font-medium" data-i18n="app.free_case_desc">${window.miniappI18n ? window.miniappI18n.t('app.free_case_desc') : 'Заберите первого дрона и начните майнить USDT бесплатно.'}</p>
                         
                         <button class="w-full bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-white font-black py-2.5 rounded-xl shadow-[0_0_15px_rgba(52,211,153,0.4)] transition-all transform group-active:scale-95 text-xs uppercase tracking-widest border border-emerald-400/50">
-                            ${window.miniappI18n.t('app.claim_free') || 'Получить'}
+                            ${window.miniappI18n ? window.miniappI18n.t('app.claim_free') : 'Получить'}
                         </button>
                     </div>
                 </div>
@@ -1262,7 +1301,7 @@ function renderHangar() {
             const isSelected = currentHangarFilter === f;
             
             const def = DRONES[f];
-            let name = window.miniappI18n.t(def.nameKey);
+            let name = window.miniappI18n ? window.miniappI18n.t(def.nameKey) : f;
             const count = state.drones.filter(d => d.type === f).length;
             
             let baseClass = 'px-4 py-2 rounded-2xl text-[11px] font-black uppercase tracking-wider whitespace-nowrap transition-all duration-300 border relative overflow-hidden group shrink-0 ';
@@ -1286,18 +1325,24 @@ function renderHangar() {
         });
     }
 
+    if (!els.hangarList) return;
     els.hangarList.innerHTML = '';
-    els.hangarCount.textContent = state.drones.length;
+    if (els.hangarCount) els.hangarCount.textContent = state.drones.length;
     
     const filteredDrones = state.drones.filter(d => d.type === currentHangarFilter);
 
     if (filteredDrones.length === 0) {
-        els.hangarEmpty.classList.remove('hidden');
-        els.hangarEmpty.classList.add('flex');
-        els.hangarEmpty.querySelector('p').textContent = window.miniappI18n.t('app.hangar_empty_filter') || 'В этой категории нет майнеров.';
+        if (els.hangarEmpty) {
+            els.hangarEmpty.classList.remove('hidden');
+            els.hangarEmpty.classList.add('flex');
+            const p = els.hangarEmpty.querySelector('p');
+            if(p) p.textContent = window.miniappI18n ? window.miniappI18n.t('app.hangar_empty_filter') : 'В этой категории нет майнеров.';
+        }
     } else {
-        els.hangarEmpty.classList.add('hidden');
-        els.hangarEmpty.classList.remove('flex');
+        if (els.hangarEmpty) {
+            els.hangarEmpty.classList.add('hidden');
+            els.hangarEmpty.classList.remove('flex');
+        }
         
         const def = DRONES[currentHangarFilter];
         const now = Date.now();
@@ -1308,7 +1353,7 @@ function renderHangar() {
         filteredDrones.sort((a, b) => b.acquiredAt - a.acquiredAt);
         
         filteredDrones.forEach(droneData => {
-            const name = window.miniappI18n.t(def.nameKey);
+            const name = window.miniappI18n ? window.miniappI18n.t(def.nameKey) : currentHangarFilter;
             
             const daysActive = (now - droneData.acquiredAt) / 86400000;
             let isStopped = false;
@@ -1328,7 +1373,7 @@ function renderHangar() {
                 wearPercent = 100;
             }
             
-            const statusText = isStopped ? (window.miniappI18n.t('app.drone_status_stopped') || 'Остановлен') : (window.miniappI18n.t('app.drone_status_mining') || 'Работает');
+            const statusText = isStopped ? (window.miniappI18n ? window.miniappI18n.t('app.drone_status_stopped') : 'Остановлен') : (window.miniappI18n ? window.miniappI18n.t('app.drone_status_mining') : 'Работает');
             const statusColor = isStopped ? 'text-red-400' : 'text-emerald-400';
             const pulseClass = isStopped ? '' : 'animate-pulse';
             const bgDot = isStopped ? 'bg-red-500' : 'bg-emerald-400';
@@ -1339,7 +1384,7 @@ function renderHangar() {
             el.className = `relative w-full rounded-[28px] p-[1.5px] bg-gradient-to-b from-gray-700 to-gray-950 ${isStopped ? 'opacity-70 grayscale-[30%]' : ''} card-hover-fx overflow-hidden group shadow-xl`;
             
             const glowBorder = isStopped ? 'from-red-900/50' : `from-${shadowColor}-500/50`;
-            const ratePeriodStr = window.miniappI18n.t('app.mining_rate_day') || 'день';
+            const ratePeriodStr = window.miniappI18n ? window.miniappI18n.t('app.mining_rate_day') : 'день';
             
             el.innerHTML = `
                 <div class="absolute inset-0 bg-gradient-to-b ${glowBorder} to-transparent opacity-20 group-hover:opacity-40 transition-opacity duration-500"></div>
@@ -1359,7 +1404,7 @@ function renderHangar() {
                             <div class="flex items-center gap-1.5">
                                 <span class="text-white font-mono font-black text-xl leading-none tracking-tight">+${def.rateDay.toFixed(3)}</span>
                             </div>
-                            <span class="text-[9px] text-gray-500 uppercase font-bold tracking-widest mt-1"><div class="relative w-3.5 h-3.5 inline-block align-middle shrink-0 mr-1"><div class="w-full h-full rounded-full bg-emerald-900/40 flex items-center justify-center border border-emerald-500/40 shadow-[0_0_5px_rgba(16,185,129,0.3)]"><svg class="w-2 h-2" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M20 40C31.0457 40 40 31.0457 40 20C40 8.9543 31.0457 0 20 0C8.9543 0 0 8.9543 0 20C0 31.0457 8.9543 40 20 40Z" fill="#26A17B"/><path d="M22.9248 18.0673H28.4348V13.8223H11.5648V18.0673H17.0748V31.6443H22.9248V18.0673Z" fill="white"/><path d="M20 23.3773C25.4638 23.3773 29.8938 22.0673 29.8938 20.4523C29.8938 18.8373 25.4638 17.5273 20 17.5273C14.5362 17.5273 10.1062 18.8373 10.1062 20.4523C10.1062 22.0673 14.5362 23.3773 20 23.3773Z" stroke="white" stroke-width="2"/></svg></div><div class="absolute -bottom-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-gray-900 border-[0.5px] border-gray-800 flex items-center justify-center z-20 shadow-[0_0_3px_rgba(0,152,234,0.5)]"><svg class="w-full h-full" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M14 28C21.732 28 28 21.732 28 14C28 6.26801 21.732 0 14 0C6.26801 0 0 6.26801 0 14C0 21.732 6.26801 28 14 28Z" fill="#0098EA"/><path d="M18.8453 8.4H9.15461C8.30396 8.4 7.77884 9.37128 8.22055 10.096L13.0659 18.0494C13.4359 18.6568 14.5641 18.6568 14.9341 18.0494L19.7794 10.096C20.2211 9.37128 19.696 8.4 18.8453 8.4Z" fill="white"/><path d="M14 16.5161L9.62341 9.42944H18.3766L14 16.5161Z" fill="#0098EA"/></svg></div></div> / ${ratePeriodStr}</span>
+                            <span class="text-[9px] text-gray-500 uppercase font-bold tracking-widest mt-1"><div class="relative w-3.5 h-3.5 inline-block align-middle shrink-0 mr-1"><div class="w-full h-full rounded-full bg-emerald-900/40 flex items-center justify-center border border-emerald-500/40 shadow-[0_0_5px_rgba(16,185,129,0.3)]"><svg class="w-2 h-2" viewBox="0 0 40 40" fill=\"none\" xmlns=\"http://www.w3.org/2000/svg\"><path d=\"M20 40C31.0457 40 40 31.0457 40 20C40 8.9543 31.0457 0 20 0C8.9543 0 0 8.9543 0 20C0 31.0457 8.9543 40 20 40Z\" fill=\"#26A17B\"/><path d=\"M22.9248 18.0673H28.4348V13.8223H11.5648V18.0673H17.0748V31.6443H22.9248V18.0673Z\" fill=\"white\"/><path d=\"M20 23.3773C25.4638 23.3773 29.8938 22.0673 29.8938 20.4523C29.8938 18.8373 25.4638 17.5273 20 17.5273C14.5362 17.5273 10.1062 18.8373 10.1062 20.4523C10.1062 22.0673 14.5362 23.3773 20 23.3773Z\" stroke=\"white\" stroke-width=\"2\"/></svg></div><div class="absolute -bottom-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-gray-900 border-[0.5px] border-gray-800 flex items-center justify-center z-20 shadow-[0_0_3px_rgba(0,152,234,0.5)]"><svg class="w-full h-full" viewBox="0 0 28 28" fill=\"none\" xmlns=\"http://www.w3.org/2000/svg\"><path d=\"M14 28C21.732 28 28 21.732 28 14C28 6.26801 21.732 0 14 0C6.26801 0 0 6.26801 0 14C0 21.732 6.26801 28 14 28Z\" fill=\"#0098EA\"/><path d=\"M18.8453 8.4H9.15461C8.30396 8.4 7.77884 9.37128 8.22055 10.096L13.0659 18.0494C13.4359 18.6568 14.5641 18.6568 14.9341 18.0494L19.7794 10.096C20.2211 9.37128 19.696 8.4 18.8453 8.4Z\" fill=\"white\"/><path d=\"M14 16.5161L9.62341 9.42944H18.3766L14 16.5161Z\" fill=\"#0098EA\"/></svg></div></div> / ${ratePeriodStr}</span>
                         </div>
                     </div>
                     
@@ -1380,11 +1425,11 @@ function renderHangar() {
                             
                             <div class="w-full">
                                 <div class="flex justify-between text-[10px] uppercase font-bold tracking-wider mb-2">
-                                    <span class="text-gray-500">${window.miniappI18n.t('app.hangar_lifespan') || 'Срок работы'}</span>
+                                    <span class="text-gray-500">${window.miniappI18n ? window.miniappI18n.t('app.hangar_lifespan') : 'Срок работы'}</span>
                                     <span class="${isStopped ? 'text-red-400' : 'text-gray-300'} font-mono">${daysLeft === '∞' ? '∞' : typeof daysLeft === 'number' ? daysLeft.toFixed(1) + ' дн.' : daysLeft}</span>
                                 </div>
                                 <div class="flex justify-between text-[10px] uppercase font-bold tracking-wider mb-2">
-                                    <span class="text-gray-500">${window.miniappI18n.t('app.hangar_mined') || 'Добыто'}</span>
+                                    <span class="text-gray-500">${window.miniappI18n ? window.miniappI18n.t('app.hangar_mined') : 'Добыто'}</span>
                                     <span class="${isStopped ? 'text-red-400' : 'text-blue-400'} font-mono">${mined.toFixed(4)} ${maxMined ? '/ ' + maxMined : ''}</span>
                                 </div>
                                 <div class="h-2.5 w-full bg-gray-950 rounded-full overflow-hidden shadow-[inset_0_1px_3px_rgba(0,0,0,0.8)] border border-gray-800/80 relative">
@@ -1449,10 +1494,11 @@ function claimFreeDrone() {
 
 // Shop View & Gacha
 function renderShop() {
+    if(!els.shopList) return;
     els.shopList.innerHTML = '';
     
     PACKS.forEach(pack => {
-        const name = window.miniappI18n.t(pack.nameKey);
+        const name = window.miniappI18n ? window.miniappI18n.t(pack.nameKey) : pack.id;
         
         let segmentsHtml = '';
         let legendHtml = '';
@@ -1463,7 +1509,7 @@ function renderShop() {
             
             legendHtml += `<div class="flex items-center gap-1 min-w-[30%]">
                 <span class="w-2 h-2 rounded-full ${def.solidBg} shadow-inner"></span>
-                <span class="${def.color} font-bold tracking-wide">${window.miniappI18n.t(def.nameKey)} <span class="text-gray-300 font-mono ml-0.5">${chance}%</span></span>
+                <span class="${def.color} font-bold tracking-wide">${window.miniappI18n ? window.miniappI18n.t(def.nameKey) : type} <span class="text-gray-300 font-mono ml-0.5">${chance}%</span></span>
             </div>`;
         }
         
@@ -1481,7 +1527,7 @@ function renderShop() {
                     
                     <div>
                         <h3 class="font-black text-xl text-white drop-shadow-md leading-tight">${name}</h3>
-                        <div class="text-[9px] text-gray-400 uppercase tracking-widest font-bold mt-1 inline-block border-b border-gray-700/50 pb-0.5" data-i18n="app.chance">${window.miniappI18n.t('app.chance') || 'Шансы выпадения'}</div>
+                        <div class="text-[9px] text-gray-400 uppercase tracking-widest font-bold mt-1 inline-block border-b border-gray-700/50 pb-0.5" data-i18n="app.chance">${window.miniappI18n ? window.miniappI18n.t('app.chance') : 'Шансы выпадения'}</div>
                     </div>
                 </div>
                 
@@ -1575,12 +1621,12 @@ function showUnboxingModal(pack, wonType) {
     if(rays) rays.classList.add('hidden');
     
     const modalContent = els.modalOverlay.querySelector('#modal-content');
-    const packName = window.miniappI18n.t(pack.nameKey);
+    const packName = window.miniappI18n ? window.miniappI18n.t(pack.nameKey) : pack.id;
     
     modalContent.innerHTML = `
         <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r ${pack.color}"></div>
         <h3 class="text-3xl font-black mb-2 text-white shadow-black drop-shadow-md">${packName}</h3>
-        <p class="text-gray-400 mb-8 text-sm">${window.miniappI18n.t('app.case_ready') || 'Кейс готов к открытию'}</p>
+        <p class="text-gray-400 mb-8 text-sm">${window.miniappI18n ? window.miniappI18n.t('app.case_ready') : 'Кейс готов к открытию'}</p>
         
         <div id="pack-container" class="w-48 h-48 mx-auto mb-10 relative transform transition-transform duration-300 animate-float cursor-pointer hover:scale-105 active:scale-95 group">
             <div class="absolute inset-0 bg-gradient-to-br ${pack.color} opacity-30 rounded-2xl blur-2xl transition-all duration-300 group-hover:opacity-50" id="pack-glow"></div>
@@ -1588,10 +1634,10 @@ function showUnboxingModal(pack, wonType) {
         </div>
         
         <button id="btn-open-case" class="w-full bg-gradient-to-r ${pack.color} text-white font-bold py-4 px-6 rounded-2xl shadow-[0_0_20px_rgba(255,255,255,0.1)] hover:scale-[1.02] active:scale-[0.98] transition uppercase tracking-wider text-lg">
-            ${window.miniappI18n.t('app.open_case') || 'Открыть кейс'}
+            ${window.miniappI18n ? window.miniappI18n.t('app.open_case') : 'Открыть кейс'}
         </button>
         <button id="btn-close-modal" class="mt-4 text-gray-500 hover:text-white text-sm font-medium transition py-2 px-4">
-            ${window.miniappI18n.t('app.close_case') || 'Закрыть (в ангар)'}
+            ${window.miniappI18n ? window.miniappI18n.t('app.close_case') : 'Закрыть (в ангар)'}
         </button>
     `;
     
@@ -1608,7 +1654,7 @@ function showUnboxingModal(pack, wonType) {
     const startOpening = () => {
         if(btnOpen.disabled) return;
         btnOpen.disabled = true;
-        btnOpen.innerHTML = `<span class="animate-pulse">${window.miniappI18n.t('app.opening') || 'Открываем...'}</span>`;
+        btnOpen.innerHTML = `<span class="animate-pulse">${window.miniappI18n ? window.miniappI18n.t('app.opening') : 'Открываем...'}</span>`;
         btnClose.classList.add('hidden');
         
         packContainer.classList.remove('animate-float', 'cursor-pointer', 'hover:scale-105', 'active:scale-95');
@@ -1640,7 +1686,7 @@ function showUnboxingModal(pack, wonType) {
 
 function showGachaResult(type) {
     const def = DRONES[type];
-    const name = window.miniappI18n.t(def.nameKey);
+    const name = window.miniappI18n ? window.miniappI18n.t(def.nameKey) : type;
     const rays = document.getElementById('gacha-rays');
     if(rays) rays.classList.remove('hidden');
     
@@ -1649,8 +1695,8 @@ function showGachaResult(type) {
     modalContent.innerHTML = `
         <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-blue-500 to-transparent"></div>
         
-        <h3 class="text-3xl font-black mb-1 text-white shadow-black drop-shadow-md">${window.miniappI18n.t('app.congratulations') || 'Поздравляем!'}</h3>
-        <p class="text-gray-400 mb-6 text-sm">${window.miniappI18n.t('app.you_got') || 'Вы получили новый майнер!'}</p>
+        <h3 class="text-3xl font-black mb-1 text-white shadow-black drop-shadow-md">${window.miniappI18n ? window.miniappI18n.t('app.congratulations') : 'Поздравляем!'}</h3>
+        <p class="text-gray-400 mb-6 text-sm">${window.miniappI18n ? window.miniappI18n.t('app.you_got') : 'Вы получили новый майнер!'}</p>
         
         <div class="w-64 py-10 px-4 rounded-[2rem] mb-8 flex flex-col items-center justify-center border-2 border-t-4 bg-gradient-to-b ${def.bg} ${def.border} shadow-[0_0_50px_rgba(0,0,0,0.6)] backdrop-blur-xl relative overflow-hidden gacha-item">
             <div class="absolute inset-0 opacity-30 ${def.solidBg}"></div>
@@ -1663,12 +1709,12 @@ function showGachaResult(type) {
             
             <div class="text-sm font-mono text-white mt-4 bg-black/60 px-5 py-2.5 rounded-xl backdrop-blur-md border border-white/20 relative z-10 flex items-center gap-2 shadow-inner">
                 <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                +${def.rateDay.toFixed(3)} / ${window.miniappI18n.t('app.mining_rate_day') || 'день'}
+                +${def.rateDay.toFixed(3)} / ${window.miniappI18n ? window.miniappI18n.t('app.mining_rate_day') : 'день'}
             </div>
         </div>
         
         <button id="btn-collect" class="w-full bg-white text-gray-900 font-black py-4 px-6 rounded-2xl shadow-[0_0_30px_rgba(255,255,255,0.2)] hover:bg-gray-200 hover:scale-[1.02] active:scale-[0.98] transition text-lg uppercase tracking-widest">
-            ${window.miniappI18n.t('app.collect') || 'Забрать'}
+            ${window.miniappI18n ? window.miniappI18n.t('app.collect') : 'Забрать'}
         </button>
     `;
     
