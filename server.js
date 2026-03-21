@@ -151,7 +151,7 @@ app.post('/api/user/sync', async (req, res) => {
     const user = await User.findOneAndUpdate(
       { tgId },
       updateData,
-      { new: true }
+      { new: true, upsert: true }
     );
     res.json({ success: true, user });
   } catch (error) {
