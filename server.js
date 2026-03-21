@@ -121,21 +121,11 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-// Корневой маршрут (чтобы убрать ошибку Cannot GET /)
-app.get('/', (req, res) => {
-    res.send(`
-        <html>
-            <head><title>ExoMiner Backend</title></head>
-            <body style="background: #111; color: #0f0; font-family: monospace; padding: 50px; text-align: center;">
-                <h1>🚀 ExoMiner Backend</h1>
-                <p>✅ API Server is running</p>
-                <p>🤖 Telegram Bot is polling...</p>
-                <p>📦 MongoDB is connected.</p>
-            </body>
-        </html>
-    `);
-});
-
+// Раздаем файлы визуального интерфейса (Фронтенд)
+app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
+app.get('/main.js', (req, res) => res.sendFile(path.join(__dirname, 'main.js')));
+//app.get('/features.js', (req, res) => res.sendFile(path.join(__dirname, 'features.js')));
+app.get('/styles.css', (req, res) => res.sendFile(path.join(__dirname, 'styles.css')));
 // --- ЭНДПОИНТЫ ДЛЯ ИГРЫ ---
 
 app.get('/api/user/:tgId', async (req, res) => {
