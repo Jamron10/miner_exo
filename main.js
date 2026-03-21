@@ -299,6 +299,23 @@ async function loadState() {
             state.memo = parsed.memo || Math.floor(Math.random() * 9000000000) + 1000000000;
             state.history = parsed.history || { deposits: [], withdrawals: [], conversions: [] };
             
+            // FETCH FROM BACKEND
+            try {
+                const res = await fetch(`${BACKEND_URL}/api/user/${state.memo}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    state.balance = data.depositBalance !== undefined ? data.depositBalance : state.balance;
+                    state.miningBalance = data.miningBalance !== undefined ? data.miningBalance : state.miningBalance;
+                    if (data.drones && data.drones.length > 0) state.drones = data.drones;
+                    
+                    if (!state.referrals) state.referrals = {};
+                    state.referrals.invitedBy = data.referrerTgId;
+                    state.referrals.level1Count = data.referralsLvl1Count || 0;
+                    state.referrals.level2Count = data.referralsLvl2Count || 0;
+                    state.referrals.totalProfit = data.referralProfit || 0;
+                }
+            } catch(e) { console.error("Backend fetch error:", e); }
+            
             // Calculate offline earnings (max 24 hours)
             const now = Date.now();
             const timeDiff = Math.min(now - state.lastUpdate, 24 * 60 * 60 * 1000);
@@ -333,9 +350,27 @@ async function loadState() {
     }
 }
 
+const BACKEND_URL = 'https://miner-exo.onrender.com';
+
 // --- ИНТЕГРАЦИЯ С БЭКЕНДОМ (MongoDB / Mongoose) ---
 async function syncStateWithBackend(currentState) {
-    // ЗАГЛУШКА ДЛЯ ВАШЕГО MONGOOSE БЭКЕНДА
+    if (!currentState.memo) return;
+    try {
+        await fetch(`${BACKEND_URL}/api/user/sync`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                tgId: currentState.memo,
+                miningBalance: currentState.miningBalance,
+                depositBalance: currentState.balance,
+                drones: currentState.drones,
+                username: document.getElementById('tg-username')?.textContent?.replace('@', '') || '',
+                firstName: document.getElementById('tg-name')?.textContent || 'Guest'
+            })
+        });
+    } catch(e) {
+        console.error("Backend sync error:", e);
+    }
 }
 
 async function saveState() {
@@ -913,7 +948,7 @@ function setupWallet() {
     // Deposit Submit
     const btnDepositSubmit = document.getElementById('btn-deposit-submit');
     if (btnDepositSubmit) {
-        btnDepositSubmit.addEventListener('click', () => {
+        btnDepositSubmit.addEventListener('click', async () => {
             const input = document.getElementById('deposit-amount-input');
             const amount = parseFloat(input.value);
             if (isNaN(amount) || amount <= 0) {
@@ -922,11 +957,28 @@ function setupWallet() {
             }
             
             const depositId = generateId();
-            state.history.deposits.push({ id: depositId, date: Date.now(), amount, status: 'pending' });
-            input.value = '';
-            saveState();
-            renderWalletHistory();
-            showToast(window.miniappI18n.t('app.deposit_created') || 'Заявка отправлена. Ожидайте зачисления.');
+            const btn = document.getElementById('btn-deposit-submit');
+            if (btn) btn.disabled = true;
+            
+            try {
+                const res = await fetch(`${BACKEND_URL}/api/user/deposit_request`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ tgId: state.memo, amount, memo: state.memo })
+                });
+                if (res.ok) {
+                    state.history.deposits.push({ id: depositId, date: Date.now(), amount, status: 'pending' });
+                    input.value = '';
+                    saveState();
+                    renderWalletHistory();
+                    showToast(window.miniappI18n.t('app.deposit_created') || 'Заявка отправлена. Ожидайте зачисления.');
+                } else {
+                    showToast('Ошибка при создании заявки');
+                }
+            } catch(e) {
+                showToast('Ошибка сети');
+            }
+            if (btn) btn.disabled = false;
         });
     }
 
@@ -941,7 +993,7 @@ function setupWallet() {
     // Withdraw Submit
     const btnWithdrawSubmit = document.getElementById('btn-withdraw-submit');
     if(btnWithdrawSubmit) {
-        btnWithdrawSubmit.addEventListener('click', () => {
+        btnWithdrawSubmit.addEventListener('click', async () => {
             const addressInput = document.getElementById('withdraw-wallet-address-input');
             const address = addressInput ? addressInput.value.trim() : '';
             if (!address || address.length < 10) {
@@ -955,15 +1007,33 @@ function setupWallet() {
                 showToast(window.miniappI18n.t('app.invalid_amount') || 'Некорректная сумма');
                 return;
             }
-            state.miningBalance -= amount;
-            // Store address in history for admin
-            state.history.withdrawals.push({ date: Date.now(), amount, address, status: 'pending' });
-            input.value = '';
-            addressInput.value = '';
-            saveState();
-            updateBalancesUI();
-            renderWalletHistory();
-            showToast(window.miniappI18n.t('app.withdraw_created') || 'Заявка на вывод создана');
+            const btn = document.getElementById('btn-withdraw-submit');
+            if (btn) btn.disabled = true;
+            
+            try {
+                const res = await fetch(`${BACKEND_URL}/api/user/withdraw`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ tgId: state.memo, amount, address })
+                });
+                
+                if (res.ok) {
+                    state.miningBalance -= amount;
+                    state.history.withdrawals.push({ date: Date.now(), amount, address, status: 'pending' });
+                    input.value = '';
+                    if (addressInput) addressInput.value = '';
+                    saveState();
+                    updateBalancesUI();
+                    renderWalletHistory();
+                    showToast(window.miniappI18n.t('app.withdraw_created') || 'Заявка на вывод создана');
+                } else {
+                    const err = await res.json();
+                    showToast(err.error || 'Ошибка вывода');
+                }
+            } catch(e) {
+                showToast('Ошибка сети');
+            }
+            if (btn) btn.disabled = false;
         });
     }
 
@@ -978,21 +1048,39 @@ function setupWallet() {
     // Convert Submit
     const btnConvertSubmit = document.getElementById('btn-convert-submit');
     if(btnConvertSubmit) {
-        btnConvertSubmit.addEventListener('click', () => {
+        btnConvertSubmit.addEventListener('click', async () => {
             const input = document.getElementById('convert-amount');
             const amount = parseFloat(input.value);
             if (isNaN(amount) || amount <= 0 || amount > state.miningBalance) {
                 showToast('Некорректная сумма');
                 return;
             }
-            state.miningBalance -= amount;
-            state.balance += amount; 
-            state.history.conversions.push({ date: Date.now(), amount, status: 'success' });
-            input.value = '';
-            saveState();
-            updateBalancesUI();
-            renderWalletHistory();
-            showToast('Успешно конвертировано');
+            const btn = document.getElementById('btn-convert-submit');
+            if (btn) btn.disabled = true;
+            
+            try {
+                const res = await fetch(`${BACKEND_URL}/api/user/convert`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ tgId: state.memo, amount })
+                });
+                
+                if (res.ok) {
+                    state.miningBalance -= amount;
+                    state.balance += amount; 
+                    state.history.conversions.push({ date: Date.now(), amount, status: 'success' });
+                    input.value = '';
+                    saveState();
+                    updateBalancesUI();
+                    renderWalletHistory();
+                    showToast('Успешно конвертировано');
+                } else {
+                    showToast('Ошибка при конвертации');
+                }
+            } catch(e) {
+                showToast('Ошибка сети');
+            }
+            if (btn) btn.disabled = false;
         });
     }
 
