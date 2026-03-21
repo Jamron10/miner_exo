@@ -1,0 +1,133 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --planet-color-1: #0f172a;
+  --planet-color-2: #3b0764;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+    display: none;
+}
+.scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+
+.pb-safe {
+    padding-bottom: env(safe-area-inset-bottom, 20px);
+}
+
+@keyframes shimmer {
+    0% { transform: translateX(-150%) skewX(-12deg); }
+    100% { transform: translateX(150%) skewX(-12deg); }
+}
+
+.card-hover-fx {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.card-hover-fx:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+}
+
+/* Modal Animation */
+.modal-show {
+    opacity: 1 !important;
+    transform: scale(1) !important;
+}
+
+/* View transitions */
+.view-section {
+    display: none;
+    animation: fadeIn 0.3s ease-out;
+}
+.view-section.active {
+    display: flex;
+}
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Nav item active state */
+.nav-item {
+    color: #6b7280;
+    transition: all 0.2s;
+}
+.nav-item.active {
+    color: #3b82f6;
+}
+.nav-item.active svg {
+    transform: translateY(-2px);
+    filter: drop-shadow(0 0 8px rgba(59, 130, 246, 0.6));
+    stroke: #3b82f6;
+}
+.nav-item svg {
+    transition: all 0.2s;
+}
+
+@keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-15px); }
+}
+
+@keyframes shake-intense {
+    0%, 100% { transform: translate(0, 0) rotate(0deg); }
+    10%, 30%, 50%, 70%, 90% { transform: translate(-4px, -4px) rotate(-4deg); }
+    20%, 40%, 60%, 80% { transform: translate(4px, 4px) rotate(4deg); }
+}
+
+.animate-float {
+    animation: float 3s ease-in-out infinite;
+}
+
+.animate-shake-intense {
+    animation: shake-intense 0.4s cubic-bezier(.36,.07,.19,.97) infinite;
+}
+
+/* Gacha Ray Animation */
+.gacha-rays {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 300px;
+    height: 300px;
+    margin-left: -150px;
+    margin-top: -150px;
+    background: conic-gradient(from 0deg, transparent 0deg, rgba(255,255,255,0.2) 10deg, transparent 20deg, rgba(255,255,255,0.2) 30deg, transparent 40deg, rgba(255,255,255,0.2) 50deg, transparent 60deg, rgba(255,255,255,0.2) 70deg, transparent 80deg, rgba(255,255,255,0.2) 90deg, transparent 100deg, rgba(255,255,255,0.2) 110deg, transparent 120deg, rgba(255,255,255,0.2) 130deg, transparent 140deg, rgba(255,255,255,0.2) 150deg, transparent 160deg, rgba(255,255,255,0.2) 170deg, transparent 180deg, rgba(255,255,255,0.2) 190deg, transparent 200deg, rgba(255,255,255,0.2) 210deg, transparent 220deg, rgba(255,255,255,0.2) 230deg, transparent 240deg, rgba(255,255,255,0.2) 250deg, transparent 260deg, rgba(255,255,255,0.2) 270deg, transparent 280deg, rgba(255,255,255,0.2) 290deg, transparent 300deg, rgba(255,255,255,0.2) 310deg, transparent 320deg, rgba(255,255,255,0.2) 330deg, transparent 340deg, rgba(255,255,255,0.2) 350deg, transparent 360deg);
+    animation: spin 10s linear infinite;
+    pointer-events: none;
+    z-index: 0;
+}
+
+@keyframes spin {
+    100% { transform: rotate(360deg); }
+}
+
+@keyframes slideUpFade {
+    0% { opacity: 0; transform: translateY(15px); }
+    100% { opacity: 1; transform: translateY(0); }
+}
+.animate-slide-up-fade {
+    animation: slideUpFade 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.gacha-item {
+    position: relative;
+    z-index: 10;
+    animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes popIn {
+    0% { transform: scale(0); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+}
+
