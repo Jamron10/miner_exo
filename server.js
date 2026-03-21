@@ -118,15 +118,18 @@ bot.onText(/\/start(?: (.*))?/, async (msg, match) => {
 // ==========================================
 // 3. EXPRESS API СЕРВЕР (Для игры и Админки)
 // ==========================================
+
 const app = express();
-app.use(express.json());
 app.use(cors());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.static(path.join(__dirname)));
 
 // Раздаем файлы визуального интерфейса (Фронтенд)
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
 app.get('/main.js', (req, res) => res.sendFile(path.join(__dirname, 'main.js')));
-//app.get('/features.js', (req, res) => res.sendFile(path.join(__dirname, 'features.js')));
+app.get('/admin.js', (req, res) => res.sendFile(path.join(__dirname, 'admin.js')));;
 app.get('/styles.css', (req, res) => res.sendFile(path.join(__dirname, 'styles.css')));
+
 // --- ЭНДПОИНТЫ ДЛЯ ИГРЫ ---
 
 app.get('/api/user/:tgId', async (req, res) => {
