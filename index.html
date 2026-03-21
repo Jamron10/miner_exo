@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ExoMiner</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body class="bg-gray-950 text-slate-200 overflow-hidden select-none">
+    <!-- Starfield Background -->
+    <div id="starfield" class="absolute inset-0 z-0 pointer-events-none opacity-60"></div>
+    
+    <!-- Toast Container -->
+    <div id="toast-container" class="fixed top-4 left-1/2 transform -translate-x-1/2 z-[100] flex flex-col gap-2 pointer-events-none"></div>
+
+    <div class="max-w-md mx-auto h-[100dvh] flex flex-col relative z-10 shadow-2xl shadow-black bg-gray-950/20 backdrop-blur-md border-x border-gray-800/50">
+        <!-- Header -->
+        <header class="flex flex-col p-3 border-b border-gray-800 bg-gray-900/40 backdrop-blur-md z-20 shrink-0">
+        <!-- Top Row -->
+        <div class="flex justify-between items-center">
+            <!-- TG User -->
+            <div class="flex items-center gap-2">
+                <div class="w-9 h-9 rounded-full overflow-hidden bg-gray-800 border border-gray-700 shrink-0 flex items-center justify-center">
+                    <img id="tg-avatar" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%239ca3af'><path d='M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z'/></svg>" class="w-full h-full object-cover">
+                </div>
+                <div class="flex flex-col">
+                    <span id="tg-name" class="text-xs font-bold text-white truncate max-w-[120px]" data-i18n="app.guest">Гость</span>
+                    <span id="tg-username" class="text-[10px] text-gray-500 truncate max-w-[120px] font-mono">@guest</span>
+                </div>
+            </div>
+            
+            <!-- Controls -->
+            <div class="flex gap-2 items-center">
+                <!-- Volume -->
+                <div class="relative">
+                    <button id="btn-volume" class="w-9 h-9 px-0 rounded-xl bg-gray-800/50 flex items-center justify-center text-gray-400 hover:text-white transition hover:bg-gray-700 border border-gray-700/50">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"></path></svg>
+                    </button>
+                    <div id="volume-dropdown" class="absolute right-0 top-full mt-2 bg-gray-800 border border-gray-700 rounded-xl shadow-xl hidden flex-col w-40 p-3 z-50" onclick="event.stopPropagation()">
+                        <div class="flex justify-between items-center mb-2">
+                            <label class="text-[10px] uppercase font-bold text-gray-400" data-i18n="app.volume">Громкость</label>
+                            <span id="volume-value" class="text-[10px] font-mono text-blue-400">50%</span>
+                        </div>
+                        <input type="range" id="volume-slider" min="0" max="100" value="50" class="w-full accent-blue-500">
+                    </div>
+                </div>
+                <!-- Lang -->
+                <div class="relative">
+                    <button id="btn-lang" class="w-9 h-9 px-2 rounded-xl bg-gray-800/50 flex items-center justify-center text-gray-400 hover:text-white transition hover:bg-gray-700 font-bold text-xs uppercase border border-gray-700/50">
+                        RU
+                    </button>
+                    <div id="lang-dropdown" class="absolute right-0 top-full mt-2 bg-gray-800 border border-gray-700 rounded-xl shadow-xl overflow-hidden hidden flex-col w-36 z-50">
+                        <button class="lang-option w-full text-left px-4 py-3 text-sm text-gray-300 hover:bg-gray-700 hover:text-white border-b border-gray-700/50" data-lang="ru">🇷🇺 Русский</button>
+                        <button class="lang-option w-full text-left px-4 py-3 text-sm text-gray-300 hover:bg-gray-700 hover:text-white" data-lang="en">🇬🇧 English</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+</header>
+
+        <!-- Main Content Area -->
+        <main class="flex-1 relative overflow-y-auto pb-24 scrollbar-hide" id="main-container">
+            
+            <!-- MINING VIEW -->
+            <div id="view-mining" class="view-section active flex-col items-center p-5 min-h-full">
+                
+                <!-- NEW: Top Rates Grid -->
+                <div class="w-full max-w-md grid grid-cols-4 gap-2 mt-2 mb-6 z-10 relative">
+                    <div class="bg-gray-800/30 backdrop-blur-md rounded-xl p-2 flex flex-col items-center justify-center border border-gray-700/50 shadow-inner">
+                        <div class="flex items-center gap-1 mb-1">
+                            <span class="font-mono text-[10px] sm:text-xs text-blue-300 font-bold" id="rate-sec">0.0000</span>
+                            <div class="relative w-3.5 h-3.5 flex items-center justify-center shrink-0">
+                                <div class="w-full h-full rounded-full bg-emerald-900/40 flex items-center justify-center border border-emerald-500/40 shadow-[0_0_5px_rgba(16,185,129,0.3)]">
+                                    <svg class="w-2 h-2" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M20 40C31.0457 40 40 31.0457 40 20C40 8.9543 31.0457 0 20 0C8.9543 0 0 8.9543 0 20C0 31.0457 8.9543 40 20 40Z" fill="#26A17B"/><path d="M22.9248 18.0673H28.4348V13.8223H11.5648V18.0673H17.0748V31.6443H22.9248V18.0673Z" fill="white"/><path d="M20 23.3773C25.4638 23.3773 29.8938 22.0673 29.8938 20.4523C29.8938 18.8373 25.4638 17.5273 20 17.5273C14.5362 17.5273 10.1062 18.8373 10.1062 20.4523C10.1062 22.0673 14.5362 23.3773 20 23.3773Z" stroke="white" stroke-width="2"/></svg>
+                                </div>
+                                <div class="absolute -bottom-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-gray-900 border-[0.5px] border-gray-800 flex items-center justify-center z-20 shadow-[0_0_3px_rgba(0,152,234,0.5)]">
+                                    <svg class="w-full h-full" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M14 28C21.732 28 28 21.732 28 14C28 6.26801 21.732 0 14 0C6.26801 0 0 6.26801 0 14C0 21.732 6.26801 28 14 28Z" fill="#0098EA"/><path d="M18.8453 8.4H9.15461C8.30396 8.4 7.77884 9.37128 8.22055 10.096L13.0659 18.0494C13.4359 18.6568 14.5641 18.6568 14.9341 18.0494L19.7794 10.096C20.2211 9.37128 19.696 8.4 18.8453 8.4Z" fill="white"/><path d="M14 16.5161L9.62341 9.42944H18.3766L14 16.5161Z" fill="#0098EA"/></svg>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="text-[9px] text-gray-500 uppercase font-bold tracking-wider" data-i18n="app.mining_rate_sec">сек</div>
+                    </div>
+                    <div class="bg-gray-800/30 backdrop-blur-md rounded-xl p-2 flex flex-col items-center justify-center border border-gray-700/50 shadow-inner">
+                        <div class="flex items-center gap-1 mb-1">
+                            <span class="font-mono text-[10px] sm:text-xs text-blue-300 font-bold" id="rate-min">0.0000</span>
+                            <div class="relative w-3.5 h-3.5 flex items-center justify-center shrink-0">
+                                <div class="w-full h-full rounded-full bg-emerald-900/40 flex items-center justify-center border border-emerald-500/40 shadow-[0_0_5px_rgba(16,185,129,0.3)]">
+                                    <svg class="w-2 h-2" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M20 40C31.0457 40 40 31.0457 40 20C40 8.9543 31.0457 0 20 0C8.9543 0 0 8.9543 0 20C0 31.0457 8.9543 40 20 40Z" fill="#26A17B"/><path d="M22.9248 18.0673H28.4348V13.8223H11.5648V18.0673H17.0748V31.6443H22.9248V18.0673Z" fill="white"/><path d="M20 23.3773C25.4638 23.3773 29.8938 22.0673 29.8938 20.4523C29.8938 18.8373 25.4638 17.5273 20 17.5273C14.5362 17.5273 10.1062 18.8373 10.1062 20.4523C10.1062 22.0673 14.5362 23.3773 20 23.3773Z" stroke="white" stroke-width="2"/></svg>
+                                </div>
+                                <div class="absolute -bottom-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-gray-900 border-[0.5px] border-gray-800 flex items-center justify-center z-20 shadow-[0_0_3px_rgba(0,152,234,0.5)]">
+                                    <svg class="w-full h-full" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M14 28C21.732 28 28 21.732 28 14C28 6.26801 21.732 0 14 0C6.26801 0 0 6.26801 0 14C0 21.732 6.26801 28 14 28Z" fill="#0098EA"/><path d="M18.8453 8.4H9.15461C8.30396 8.4 7.77884 9.37128 8.22055 10.096L13.0659 18.0494C13.4359 18.6568 14.5641 18.6568 14.9341 18.0494L19.7794 10.096C20.2211 9.37128 19.696 8.4 18.8453 8.4Z" fill="white"/><path d="M14 16.5161L9.62341 9.42944H18.3766L14 16.5161Z" fill="#0098EA"/></svg>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="text-[9px] text-gray-500 uppercase font-bold tracking-wider" data-i18n="app.mining_rate_min">мин</div>
+                    </div>
+                    <div class="bg-gray-800/30 backdrop-blur-md rounded-xl p-2 flex flex-col items-center justify-center border border-gray-700/50 shadow-inner">
+                        <div class="flex items-center gap-1 mb-1">
+                            <span class="font-mono text-[10px] sm:text-xs text-blue-300 font-bold" id="rate-hour">0.0000</span>
+                            <div class="relative w-3.5 h-3.5 flex items-center justify-center shrink-0">
+                                <div class="w-full h-full rounded-full bg-emerald-900/40 flex items-center justify-center border border-emerald-500/40 shadow-[0_0_5px_rgba(16,185,129,0.3)]">
+                                    <svg class="w-2 h-2" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M20 40C31.0457 40 40 31.0457 40 20C40 8.9543 31.0457 0 20 0C8.9543 0 0 8.9543 0 20C0 31.0457 8.9543 40 20 40Z" fill="#26A17B"/><path d="M22.9248 18.0673H28.4348V13.8223H11.5648V18.0673H17.0748V31.6443H22.9248V18.0673Z" fill="white"/><path d="M20 23.3773C25.4638 23.3773 29.8938 22.0673 29.8938 20.4523C29.8938 18.8373 25.4638 17.5273 20 17.5273C14.5362 17.5273 10.1062 18.8373 10.1062 20.4523C10.1062 22.0673 14.5362 23.3773 20 23.3773Z" stroke="white" stroke-width="2"/></svg>
+                                </div>
+                                <div class="absolute -bottom-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-gray-900 border-[0.5px] border-gray-800 flex items-center justify-center z-20 shadow-[0_0_3px_rgba(0,152,234,0.5)]">
+                                    <svg class="w-full h-full" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M14 28C21.732 28 28 21.732 28 14C28 6.26801 21.732 0 14 0C6.26801 0 0 6.26801 0 14C0 21.732 6.26801 28 14 28Z" fill="#0098EA"/><path d="M18.8453 8.4H9.15461C8.30396 8.4 7.77884 9.37128 8.22055 10.096L13.0659 18.0494C13.4359 18.6568 14.5641 18.6568 14.9341 18.0494L19.7794 10.096C20.2211 9.37128 19.696 8.4 18.8453 8.4Z" fill="white"/><path d="M14 16.5161L9.62341 9.42944H18.3766L14 16.5161Z" fill="#0098EA"/></svg>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="text-[9px] text-gray-500 uppercase font-bold tracking-wider" data-i18n="app.mining_rate_hour">час</div>
+                    </div>
+                    <div class="bg-gray-800/30 backdrop-blur-md rounded-xl p-2 flex flex-col items-center justify-center border border-gray-700/50 shadow-inner">
+                        <div class="flex items-center gap-1 mb-1">
+                            <span class="font-mono text-[10px] sm:text-xs text-blue-300 font-bold" id="rate-day">0.000</span>
+                            <div class="relative w-3.5 h-3.5 flex items-center justify-center shrink-0">
+                                <div class="w-full h-full rounded-full bg-emerald-900/40 flex items-center justify-center border border-emerald-500/40 shadow-[0_0_5px_rgba(16,185,129,0.3)]">
+                                    <svg class="w-2 h-2" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M20 40C31.0457 40 40 31.0457 40 20C40 8.9543 31.0457 0 20 0C8.9543 0 0 8.9543 0 20C0 31.0457 8.9543 40 20 40Z" fill="#26A17B"/><path d="M22.9248 18.0673H28.4348V13.8223H11.5648V18.0673H17.0748V31.6443H22.9248V18.0673Z" fill="white"/><path d="M20 23.3773C25.4638 23.3773 29.8938 22.0673 29.8938 20.4523C29.8938 18.8373 25.4638 17.5273 20 17.5273C14.5362 17.5273 10.1062 18.8373 10.1062 20.4523C10.1062 22.0673 14.5362 23.3773 20 23.3773Z" stroke="white" stroke-width="2"/></svg>
+                                </div>
+                                <div class="absolute -bottom-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-gray-900 border-[0.5px] border-gray-800 flex items-center justify-center z-20 shadow-[0_0_3px_rgba(0,152,234,0.5)]">
+                                    <svg class="w-full h-full" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M14 28C21.732 28 28 21.732 28 14C28 6.26801 21.732 0 14 0C6.26801 0 0 6.26801 0 14C0 21.732 6.26801 28 14 28Z" fill="#0098EA"/><path d="M18.8453 8.4H9.15461C8.30396 8.4 7.77884 9.37128 8.22055 10.096L13.0659 18.0494C13.4359 18.6568 14.5641 18.6568 14.9341 18.0494L19.7794 10.096C20.2211 9.37128 19.696 8.4 18.8453 8.4Z" fill="white"/><path d="M14 16.5161L9.62341 9.42944H18.3766L14 16.5161Z" fill="#0098EA"/></svg>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="text-[9px] text-gray-500 uppercase font-bold tracking-wider" data-i18n="app.mining_rate_day">день</div>
+                    </div>
+                </div>
+                
+                <!-- Planet Area with 3D Canvas -->
+                <div class="flex-1 w-full relative mb-8 min-h-[260px] flex items-center justify-center" id="planet-3d-container">
+                    <!-- Three.js Canvas injected here -->
+                </div>
+                
+                <!-- Airdrop Banner -->
+                <div class="w-full max-w-sm mb-4 shrink-0">
+                    <div id="btn-airdrop" class="bg-indigo-900/40 backdrop-blur-xl border border-indigo-500/30 rounded-2xl p-3 flex justify-between items-center cursor-pointer hover:bg-indigo-900/60 transition shadow-[0_0_15px_rgba(99,102,241,0.2)]">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-xl bg-indigo-500/20 flex items-center justify-center text-indigo-400 border border-indigo-500/30 shrink-0">
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                            </div>
+                            <div class="flex flex-col text-left">
+                                <span class="text-sm font-bold text-indigo-200" data-i18n="app.airdrop_title">Ежечасный Airdrop</span>
+                                <span class="text-[10px] text-indigo-400" id="airdrop-status" data-i18n="app.airdrop_desc">Смотреть рекламу (0.001 USDT)</span>
+                            </div>
+                        </div>
+                        <div class="bg-indigo-600 text-white text-[10px] font-bold px-3 py-1.5 rounded-lg uppercase tracking-wider shrink-0" id="airdrop-action" data-i18n="app.airdrop_btn">Смотреть</div>
+                    </div>
+                </div>
+                
+                <!-- Bottom Unclaimed Area -->
+                <div class="bg-gray-800/30 backdrop-blur-xl border border-gray-700 rounded-3xl p-5 w-full max-w-sm mb-6 shadow-2xl relative overflow-hidden shrink-0">
+                    <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 via-purple-500 to-emerald-500"></div>
+                    
+                    <div class="flex justify-between items-center mb-3">
+                        <div class="flex items-center gap-1.5"><span class="text-xs text-gray-400 font-medium uppercase tracking-wider" data-i18n="app.unclaimed_balance">Намайнено</span><div class="relative w-3.5 h-3.5 inline-block shrink-0"><div class="w-full h-full rounded-full bg-emerald-900/40 flex items-center justify-center border border-emerald-500/40 shadow-[0_0_5px_rgba(16,185,129,0.3)]"><svg class="w-2 h-2" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M20 40C31.0457 40 40 31.0457 40 20C40 8.9543 31.0457 0 20 0C8.9543 0 0 8.9543 0 20C0 31.0457 8.9543 40 20 40Z" fill="#26A17B"/><path d="M22.9248 18.0673H28.4348V13.8223H11.5648V18.0673H17.0748V31.6443H22.9248V18.0673Z" fill="white"/><path d="M20 23.3773C25.4638 23.3773 29.8938 22.0673 29.8938 20.4523C29.8938 18.8373 25.4638 17.5273 20 17.5273C14.5362 17.5273 10.1062 18.8373 10.1062 20.4523C10.1062 22.0673 14.5362 23.3773 20 23.3773Z" stroke="white" stroke-width="2"/></svg></div><div class="absolute -bottom-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-gray-900 border-[0.5px] border-gray-800 flex items-center justify-center z-20 shadow-[0_0_3px_rgba(0,152,234,0.5)]"><svg class="w-full h-full" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M14 28C21.732 28 28 21.732 28 14C28 6.26801 21.732 0 14 0C6.26801 0 0 6.26801 0 14C0 21.732 6.26801 28 14 28Z" fill="#0098EA"/><path d="M18.8453 8.4H9.15461C8.30396 8.4 7.77884 9.37128 8.22055 10.096L13.0659 18.0494C13.4359 18.6568 14.5641 18.6568 14.9341 18.0494L19.7794 10.096C20.2211 9.37128 19.696 8.4 18.8453 8.4Z" fill="white"/><path d="M14 16.5161L9.62341 9.42944H18.3766L14 16.5161Z" fill="#0098EA"/></svg></div></div></div>
+                        <div class="flex items-center gap-1.5 text-emerald-400 bg-emerald-900/20 px-2 py-1 rounded-md border border-emerald-800/50">
+                            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_#34d399]"></span>
+                            <span class="text-[10px] font-bold uppercase tracking-widest" data-i18n="app.drone_status_mining">Работает</span>
+                        </div>
+                    </div>
+                    
+                    <div class="flex justify-between items-center gap-3">
+                        <div class="font-mono text-3xl sm:text-4xl font-light text-white tracking-tight drop-shadow-[0_0_15px_rgba(255,255,255,0.2)] truncate" id="mining-counter">0.000000</div>
+                        
+                        <button id="btn-claim" class="w-14 h-14 shrink-0 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-full shadow-[0_0_15px_rgba(79,70,229,0.4)] transition transform hover:scale-[1.05] active:scale-[0.95] flex justify-center items-center relative overflow-hidden group" data-i18n-title="app.claim" title="Собрать USDT">
+                            <div class="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-out"></div>
+                            <svg class="w-7 h-7 relative z-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- HANGAR VIEW -->
+            <div id="view-hangar" class="view-section flex-col p-5 min-h-full">
+                <div class="flex justify-between items-end mb-6">
+                    <h2 class="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500" data-i18n="app.hangar_title">Ваши майнеры</h2>
+                    <div class="text-sm font-mono text-blue-400 bg-blue-900/20 px-3 py-1 rounded-lg border border-blue-500/30">
+                        <span id="hangar-count">0</span> <span data-i18n="app.hangar_drones_count">Майнеров</span>
+                    </div>
+                </div>
+                
+                <!-- Free Case Container -->
+                <div id="free-case-container" class="hidden mb-6"></div>
+                
+                <div id="hangar-filters" class="flex overflow-x-auto gap-2 pb-2 mb-4 scrollbar-hide shrink-0">
+                    <!-- Filters injected by JS -->
+                </div>
+
+                <div id="hangar-empty" class="hidden flex-col items-center justify-center py-12 text-center">
+                    <div class="w-20 h-20 bg-gray-800 rounded-full flex items-center justify-center mb-4 border border-gray-700">
+                        <svg class="w-10 h-10 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>
+                    </div>
+                    <p class="text-gray-400" data-i18n="app.hangar_empty">У вас пока нет майнеров. Купите контракт в магазине!</p>
+                </div>
+
+                <div id="hangar-list" class="grid grid-cols-1 gap-3">
+                    <!-- Drones injected here -->
+                </div>
+            </div>
+
+            <!-- SHOP VIEW -->
+            <div id="view-shop" class="view-section flex-col p-5 min-h-full">
+                <h2 class="text-2xl font-black mb-6 text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-emerald-500" data-i18n="app.shop_title">Контракты</h2>
+                <div id="shop-list" class="flex flex-col gap-4">
+                    <!-- Packs injected here -->
+                </div>
+            </div>
+
+            <!-- WALLET VIEW -->
+            <div id="view-wallet" class="view-section flex-col p-5 min-h-full pb-24">
+                
+                <!-- Tabs inside Wallet -->
+                <div class="flex bg-gray-900/80 backdrop-blur-xl border border-gray-800 p-1.5 rounded-2xl mb-6 shrink-0 relative z-10 shadow-[0_10px_30px_rgba(0,0,0,0.5)]">
+                    <button class="wallet-tab-btn active group flex-1 py-2.5 text-[10px] sm:text-xs font-black uppercase tracking-wider rounded-xl transition-all duration-300 text-white bg-gradient-to-r from-blue-600 to-blue-500 shadow-[0_0_15px_rgba(37,99,235,0.4)]" data-tab="deposit" data-i18n="app.wallet_tab_deposit">Пополнение</button>
+                    <button class="wallet-tab-btn flex-1 py-2.5 text-[10px] sm:text-xs font-black uppercase tracking-wider rounded-xl transition-all duration-300 text-gray-400 hover:text-white hover:bg-gray-800/50" data-tab="withdraw" data-i18n="app.wallet_tab_withdraw">Вывод</button>
+                    <button class="wallet-tab-btn flex-1 py-2.5 text-[10px] sm:text-xs font-black uppercase tracking-wider rounded-xl transition-all duration-300 text-gray-400 hover:text-white hover:bg-gray-800/50" data-tab="convert" data-i18n="app.wallet_tab_convert">Конвертация</button>
+                </div>
+
+                <!-- TAB 1: DEPOSIT -->
+                <div id="wallet-tab-deposit" class="wallet-tab-content block pb-6 animate-slide-up-fade">
+                    
+                    <div class="relative overflow-hidden bg-gradient-to-br from-blue-900/40 to-indigo-900/20 border border-blue-500/30 rounded-[2rem] p-6 text-center mb-6 shadow-[0_0_30px_rgba(37,99,235,0.15)] group">
+                        <div class="absolute -left-10 -top-10 w-32 h-32 bg-blue-500/20 blur-3xl rounded-full mix-blend-screen group-hover:bg-blue-400/30 transition-colors duration-700"></div>
+                        <div class="absolute -right-10 -bottom-10 w-32 h-32 bg-indigo-500/20 blur-3xl rounded-full mix-blend-screen group-hover:bg-indigo-400/30 transition-colors duration-700"></div>
+                        
+                        <div id="dev-deposit-trigger" class="relative z-10 text-[10px] text-blue-200/70 font-black uppercase tracking-widest mb-2 select-none cursor-pointer" data-i18n="app.deposit_balance">Баланс депозита</div>
+                        <div class="relative z-10 flex items-center justify-center gap-2">
+                            <span class="text-4xl sm:text-5xl font-mono font-light text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.3)] tracking-tight" id="wallet-deposit-balance">0.0000</span> 
+                            <div class="bg-blue-500/10 p-1.5 rounded-xl border border-blue-500/20 shadow-inner mt-1 flex items-center justify-center"><div class="relative w-6 h-6 inline-block align-middle shrink-0"><div class="w-full h-full rounded-full bg-emerald-900/40 flex items-center justify-center border border-emerald-500/40 shadow-[0_0_5px_rgba(16,185,129,0.3)]"><svg class="w-3.5 h-3.5" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M20 40C31.0457 40 40 31.0457 40 20C40 8.9543 31.0457 0 20 0C8.9543 0 0 8.9543 0 20C0 31.0457 8.9543 40 20 40Z" fill="#26A17B"/><path d="M22.9248 18.0673H28.4348V13.8223H11.5648V18.0673H17.0748V31.6443H22.9248V18.0673Z" fill="white"/><path d="M20 23.3773C25.4638 23.3773 29.8938 22.0673 29.8938 20.4523C29.8938 18.8373 25.4638 17.5273 20 17.5273C14.5362 17.5273 10.1062 18.8373 10.1062 20.4523C10.1062 22.0673 14.5362 23.3773 20 23.3773Z" stroke="white" stroke-width="2"/></svg></div><div class="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-gray-900 border-[1px] border-gray-800 flex items-center justify-center z-20 shadow-[0_0_3px_rgba(0,152,234,0.5)]"><svg class="w-full h-full" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M14 28C21.732 28 28 21.732 28 14C28 6.26801 21.732 0 14 0C6.26801 0 0 6.26801 0 14C0 21.732 6.26801 28 14 28Z" fill="#0098EA"/><path d="M18.8453 8.4H9.15461C8.30396 8.4 7.77884 9.37128 8.22055 10.096L13.0659 18.0494C13.4359 18.6568 14.5641 18.6568 14.9341 18.0494L19.7794 10.096C20.2211 9.37128 19.696 8.4 18.8453 8.4Z" fill="white"/><path d="M14 16.5161L9.62341 9.42944H18.3766L14 16.5161Z" fill="#0098EA"/></svg></div></div></div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-blue-900/10 backdrop-blur-md border border-blue-500/20 rounded-2xl p-4 mb-6 text-xs text-blue-200/80 leading-relaxed text-left shadow-inner relative overflow-hidden">
+                        <div class="absolute top-0 left-0 w-1 h-full bg-blue-500"></div>
+                        <span data-i18n="app.deposit_warning">Отправляйте USDT исключительно в сети TON на указанный адрес (минимум 1.0000 USDT). Обязательно укажите ваш личный MEMO в комментарии к транзакции — без него депозит не будет зачислен, а средства будут утеряны безвозвратно. Не отправляйте другие токены и не используйте другие сети.</span>
+                    </div>
+
+                    <div class="space-y-4 mb-8 text-left">
+                        <div class="group relative">
+                            <label class="text-[10px] text-gray-500 font-black uppercase tracking-wider mb-1.5 block pl-1 transition-colors group-focus-within:text-blue-400" data-i18n="app.deposit_address_label">Адрес для пополнения</label>
+                            <div class="flex items-center gap-2">
+                                <div class="bg-gray-900/80 backdrop-blur-sm border border-gray-700 group-hover:border-blue-500/50 rounded-xl p-3.5 flex-1 overflow-hidden shadow-inner transition-colors duration-300">
+                                    <div class="text-xs text-gray-300 font-mono truncate" id="deposit-address">UQAZ4SVVMcdWdemuzKbU-hUe6oZ33Heg8xNzGmhl_J-XT54c</div>
+                                </div>
+                                <button class="w-[52px] h-[52px] shrink-0 bg-gray-800 hover:bg-blue-600 border border-gray-600 hover:border-blue-500 rounded-xl flex items-center justify-center transition-all duration-300 active:scale-95 btn-copy shadow-lg group-hover:shadow-[0_0_15px_rgba(37,99,235,0.2)]" data-target="deposit-address">
+                                    <svg class="w-5 h-5 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="group relative">
+                            <label class="text-[10px] text-gray-500 font-black uppercase tracking-wider mb-1.5 block pl-1 transition-colors group-focus-within:text-blue-400" data-i18n="app.deposit_memo_label">Ваш MEMO (обязательно)</label>
+                            <div class="flex items-center gap-2">
+                                <div class="bg-gray-900/80 backdrop-blur-sm border border-gray-700 group-hover:border-blue-500/50 rounded-xl p-3.5 flex-1 overflow-hidden shadow-inner transition-colors duration-300">
+                                    <div class="text-sm text-gray-100 font-mono truncate tracking-widest font-black drop-shadow-sm" id="deposit-memo">5730406030</div>
+                                </div>
+                                <button class="w-[52px] h-[52px] shrink-0 bg-gray-800 hover:bg-blue-600 border border-gray-600 hover:border-blue-500 rounded-xl flex items-center justify-center transition-all duration-300 active:scale-95 btn-copy shadow-lg group-hover:shadow-[0_0_15px_rgba(37,99,235,0.2)]" data-target="deposit-memo">
+                                    <svg class="w-5 h-5 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="pt-6 mt-6 relative">
+                            <div class="absolute top-0 left-10 right-10 h-px bg-gradient-to-r from-transparent via-gray-700 to-transparent"></div>
+                            <label class="text-[10px] text-gray-500 font-black uppercase tracking-wider mb-2 flex items-center gap-1.5 pl-1"><span data-i18n="app.deposit_amount_label">Сумма отправленного перевода</span><div class="relative w-3.5 h-3.5 inline-block shrink-0"><div class="w-full h-full rounded-full bg-emerald-900/40 flex items-center justify-center border border-emerald-500/40 shadow-[0_0_5px_rgba(16,185,129,0.3)]"><svg class="w-2 h-2" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M20 40C31.0457 40 40 31.0457 40 20C40 8.9543 31.0457 0 20 0C8.9543 0 0 8.9543 0 20C0 31.0457 8.9543 40 20 40Z" fill="#26A17B"/><path d="M22.9248 18.0673H28.4348V13.8223H11.5648V18.0673H17.0748V31.6443H22.9248V18.0673Z" fill="white"/><path d="M20 23.3773C25.4638 23.3773 29.8938 22.0673 29.8938 20.4523C29.8938 18.8373 25.4638 17.5273 20 17.5273C14.5362 17.5273 10.1062 18.8373 10.1062 20.4523C10.1062 22.0673 14.5362 23.3773 20 23.3773Z" stroke="white" stroke-width="2"/></svg></div><div class="absolute -bottom-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-gray-900 border-[0.5px] border-gray-800 flex items-center justify-center z-20 shadow-[0_0_3px_rgba(0,152,234,0.5)]"><svg class="w-full h-full" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M14 28C21.732 28 28 21.732 28 14C28 6.26801 21.732 0 14 0C6.26801 0 0 6.26801 0 14C0 21.732 6.26801 28 14 28Z" fill="#0098EA"/><path d="M18.8453 8.4H9.15461C8.30396 8.4 7.77884 9.37128 8.22055 10.096L13.0659 18.0494C13.4359 18.6568 14.5641 18.6568 14.9341 18.0494L19.7794 10.096C20.2211 9.37128 19.696 8.4 18.8453 8.4Z" fill="white"/><path d="M14 16.5161L9.62341 9.42944H18.3766L14 16.5161Z" fill="#0098EA"/></svg></div></div></label>
+                            <div class="flex flex-col gap-3 group">
+                                <div class="relative">
+                                    <input type="number" id="deposit-amount-input" class="w-full bg-gray-900/80 backdrop-blur-sm border border-gray-700 group-focus-within:border-blue-500/50 rounded-xl p-4 pl-12 font-mono text-white placeholder-gray-600 shadow-inner focus:outline-none transition-colors duration-300 text-lg" placeholder="0.0000">
+                                    <div class="absolute left-4 top-1/2 transform -translate-y-1/2 z-10">
+                                    <div class="relative w-5 h-5 flex items-center justify-center shrink-0">
+                                        <div class="w-full h-full rounded-full bg-emerald-900/40 flex items-center justify-center border border-emerald-500/40 shadow-[0_0_5px_rgba(16,185,129,0.3)]">
+                                            <svg class="w-3 h-3" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M20 40C31.0457 40 40 31.0457 40 20C40 8.9543 31.0457 0 20 0C8.9543 0 0 8.9543 0 20C0 31.0457 8.9543 40 20 40Z" fill="#26A17B"/><path d="M22.9248 18.0673H28.4348V13.8223H11.5648V18.0673H17.0748V31.6443H22.9248V18.0673Z" fill="white"/><path d="M20 23.3773C25.4638 23.3773 29.8938 22.0673 29.8938 20.4523C29.8938 18.8373 25.4638 17.5273 20 17.5273C14.5362 17.5273 10.1062 18.8373 10.1062 20.4523C10.1062 22.0673 14.5362 23.3773 20 23.3773Z" stroke="white" stroke-width="2"/></svg>
+                                        </div>
+                                        <div class="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-gray-900 border-[1px] border-gray-800 flex items-center justify-center z-20 shadow-[0_0_3px_rgba(0,152,234,0.5)]">
+                                            <svg class="w-full h-full" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M14 28C21.732 28 28 21.732 28 14C28 6.26801 21.732 0 14 0C6.26801 0 0 6.26801 0 14C0 21.732 6.26801 28 14 28Z" fill="#0098EA"/><path d="M18.8453 8.4H9.15461C8.30396 8.4 7.77884 9.37128 8.22055 10.096L13.0659 18.0494C13.4359 18.6568 14.5641 18.6568 14.9341 18.0494L19.7794 10.096C20.2211 9.37128 19.696 8.4 18.8453 8.4Z" fill="white"/><path d="M14 16.5161L9.62341 9.42944H18.3766L14 16.5161Z" fill="#0098EA"/></svg>
+                                        </div>
+                                    </div>
+                                </div>
+                                </div>
+                                <button id="btn-deposit-submit" class="w-full bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white font-black py-4 px-6 rounded-xl transition-all duration-300 shadow-[0_0_20px_rgba(37,99,235,0.4)] active:scale-[0.98] uppercase tracking-widest overflow-hidden relative">
+                                    <div class="absolute inset-0 bg-white/20 translate-y-full hover:translate-y-0 transition-transform duration-300 ease-out"></div>
+                                    <span class="relative z-10" data-i18n="app.deposit_submit">Я отправил</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <h3 class="text-xs font-black mb-4 text-gray-500 uppercase tracking-widest flex items-center gap-2">
+                        <div class="h-px flex-1 bg-gradient-to-r from-gray-800 to-transparent"></div>
+                        <span data-i18n="app.deposit_history">История депозитов</span>
+                        <div class="h-px flex-1 bg-gradient-to-l from-gray-800 to-transparent"></div>
+                    </h3>
+                    <div id="history-deposits" class="space-y-3">
+                        <!-- Items -->
+                    </div>
+                </div>
+
+                <!-- TAB 2: WITHDRAW -->
+                <div id="wallet-tab-withdraw" class="wallet-tab-content hidden pb-6 animate-slide-up-fade">
+                    <div class="relative overflow-hidden bg-gradient-to-br from-emerald-900/40 to-teal-900/20 border border-emerald-500/30 rounded-[2rem] p-6 text-center mb-8 shadow-[0_0_30px_rgba(16,185,129,0.15)] group">
+                        <div class="absolute -left-10 -top-10 w-32 h-32 bg-emerald-500/20 blur-3xl rounded-full mix-blend-screen group-hover:bg-emerald-400/30 transition-colors duration-700"></div>
+                        <div class="absolute -right-10 -bottom-10 w-32 h-32 bg-teal-500/20 blur-3xl rounded-full mix-blend-screen group-hover:bg-teal-400/30 transition-colors duration-700"></div>
+                        
+                        <div class="relative z-10 text-[10px] text-emerald-200/70 font-black uppercase tracking-widest mb-2" data-i18n="app.withdraw_available">Доступно для вывода</div>
+                        <div class="relative z-10 flex items-center justify-center gap-2">
+                            <span class="text-4xl sm:text-5xl font-mono font-light text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.3)] tracking-tight" id="wallet-withdraw-balance">0.0000</span> 
+                            <div class="bg-emerald-500/10 p-1.5 rounded-xl border border-emerald-500/20 shadow-inner mt-1 flex items-center justify-center"><div class="relative w-6 h-6 inline-block align-middle shrink-0"><div class="w-full h-full rounded-full bg-emerald-900/40 flex items-center justify-center border border-emerald-500/40 shadow-[0_0_5px_rgba(16,185,129,0.3)]"><svg class="w-3.5 h-3.5" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M20 40C31.0457 40 40 31.0457 40 20C40 8.9543 31.0457 0 20 0C8.9543 0 0 8.9543 0 20C0 31.0457 8.9543 40 20 40Z" fill="#26A17B"/><path d="M22.9248 18.0673H28.4348V13.8223H11.5648V18.0673H17.0748V31.6443H22.9248V18.0673Z" fill="white"/><path d="M20 23.3773C25.4638 23.3773 29.8938 22.0673 29.8938 20.4523C29.8938 18.8373 25.4638 17.5273 20 17.5273C14.5362 17.5273 10.1062 18.8373 10.1062 20.4523C10.1062 22.0673 14.5362 23.3773 20 23.3773Z" stroke="white" stroke-width="2"/></svg></div><div class="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-gray-900 border-[1px] border-gray-800 flex items-center justify-center z-20 shadow-[0_0_3px_rgba(0,152,234,0.5)]"><svg class="w-full h-full" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M14 28C21.732 28 28 21.732 28 14C28 6.26801 21.732 0 14 0C6.26801 0 0 6.26801 0 14C0 21.732 6.26801 28 14 28Z" fill="#0098EA"/><path d="M18.8453 8.4H9.15461C8.30396 8.4 7.77884 9.37128 8.22055 10.096L13.0659 18.0494C13.4359 18.6568 14.5641 18.6568 14.9341 18.0494L19.7794 10.096C20.2211 9.37128 19.696 8.4 18.8453 8.4Z" fill="white"/><path d="M14 16.5161L9.62341 9.42944H18.3766L14 16.5161Z" fill="#0098EA"/></svg></div></div></div>
+                        </div>
+                    </div>
+                    
+                    <h2 class="text-xl font-black mb-5 text-transparent bg-clip-text bg-gradient-to-r from-white to-gray-400 drop-shadow-sm" data-i18n="app.withdraw_btn">Withdraw USDT+TON</h2>
+
+                    <div class="space-y-5 mb-8">
+                        <div class="group relative">
+                            <label class="text-[10px] text-gray-500 font-black uppercase tracking-wider mb-1.5 block pl-1 transition-colors group-focus-within:text-emerald-400" data-i18n="app.withdraw_wallet_label">Ваш адрес USDT в сети TON для вывода</label>
+                            <div class="relative">
+                                <input type="text" id="withdraw-wallet-address-input" class="w-full bg-gray-900/80 backdrop-blur-sm border border-gray-700 group-focus-within:border-emerald-500/50 rounded-xl p-4 pl-12 font-mono text-white placeholder-gray-600 shadow-inner focus:outline-none transition-colors duration-300 text-sm" data-i18n-placeholder="app.withdraw_address_placeholder" placeholder="Например: UQ...">
+                                <svg class="w-5 h-5 absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path></svg>
+                            </div>
+                        </div>
+                        
+                        <div class="group relative">
+                            <label class="text-[10px] text-gray-500 font-black uppercase tracking-wider mb-1.5 flex items-center gap-1.5 pl-1 transition-colors group-focus-within:text-emerald-400"><span data-i18n="app.withdraw_amount_label">Сумма</span><div class="relative w-3.5 h-3.5 inline-block shrink-0"><div class="w-full h-full rounded-full bg-emerald-900/40 flex items-center justify-center border border-emerald-500/40 shadow-[0_0_5px_rgba(16,185,129,0.3)]"><svg class="w-2 h-2" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M20 40C31.0457 40 40 31.0457 40 20C40 8.9543 31.0457 0 20 0C8.9543 0 0 8.9543 0 20C0 31.0457 8.9543 40 20 40Z" fill="#26A17B"/><path d="M22.9248 18.0673H28.4348V13.8223H11.5648V18.0673H17.0748V31.6443H22.9248V18.0673Z" fill="white"/><path d="M20 23.3773C25.4638 23.3773 29.8938 22.0673 29.8938 20.4523C29.8938 18.8373 25.4638 17.5273 20 17.5273C14.5362 17.5273 10.1062 18.8373 10.1062 20.4523C10.1062 22.0673 14.5362 23.3773 20 23.3773Z" stroke="white" stroke-width="2"/></svg></div><div class="absolute -bottom-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-gray-900 border-[0.5px] border-gray-800 flex items-center justify-center z-20 shadow-[0_0_3px_rgba(0,152,234,0.5)]"><svg class="w-full h-full" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M14 28C21.732 28 28 21.732 28 14C28 6.26801 21.732 0 14 0C6.26801 0 0 6.26801 0 14C0 21.732 6.26801 28 14 28Z" fill="#0098EA"/><path d="M18.8453 8.4H9.15461C8.30396 8.4 7.77884 9.37128 8.22055 10.096L13.0659 18.0494C13.4359 18.6568 14.5641 18.6568 14.9341 18.0494L19.7794 10.096C20.2211 9.37128 19.696 8.4 18.8453 8.4Z" fill="white"/><path d="M14 16.5161L9.62341 9.42944H18.3766L14 16.5161Z" fill="#0098EA"/></svg></div></div></label>
+                            <div class="flex items-center gap-2">
+                                <div class="relative flex-1">
+                                    <input type="number" id="withdraw-amount" class="w-full bg-gray-900/80 backdrop-blur-sm border border-gray-700 group-focus-within:border-emerald-500/50 rounded-xl p-4 pl-12 font-mono text-white placeholder-gray-600 shadow-inner focus:outline-none transition-colors duration-300 text-lg" placeholder="0.0000">
+                                    <div class="absolute left-4 top-1/2 transform -translate-y-1/2 z-10">
+                                    <div class="relative w-5 h-5 flex items-center justify-center shrink-0">
+                                        <div class="w-full h-full rounded-full bg-emerald-900/40 flex items-center justify-center border border-emerald-500/40 shadow-[0_0_5px_rgba(16,185,129,0.3)]">
+                                            <svg class="w-3 h-3" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M20 40C31.0457 40 40 31.0457 40 20C40 8.9543 31.0457 0 20 0C8.9543 0 0 8.9543 0 20C0 31.0457 8.9543 40 20 40Z" fill="#26A17B"/><path d="M22.9248 18.0673H28.4348V13.8223H11.5648V18.0673H17.0748V31.6443H22.9248V18.0673Z" fill="white"/><path d="M20 23.3773C25.4638 23.3773 29.8938 22.0673 29.8938 20.4523C29.8938 18.8373 25.4638 17.5273 20 17.5273C14.5362 17.5273 10.1062 18.8373 10.1062 20.4523C10.1062 22.0673 14.5362 23.3773 20 23.3773Z" stroke="white" stroke-width="2"/></svg>
+                                        </div>
+                                        <div class="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-gray-900 border-[1px] border-gray-800 flex items-center justify-center z-20 shadow-[0_0_3px_rgba(0,152,234,0.5)]">
+                                            <svg class="w-full h-full" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M14 28C21.732 28 28 21.732 28 14C28 6.26801 21.732 0 14 0C6.26801 0 0 6.26801 0 14C0 21.732 6.26801 28 14 28Z" fill="#0098EA"/><path d="M18.8453 8.4H9.15461C8.30396 8.4 7.77884 9.37128 8.22055 10.096L13.0659 18.0494C13.4359 18.6568 14.5641 18.6568 14.9341 18.0494L19.7794 10.096C20.2211 9.37128 19.696 8.4 18.8453 8.4Z" fill="white"/><path d="M14 16.5161L9.62341 9.42944H18.3766L14 16.5161Z" fill="#0098EA"/></svg>
+                                        </div>
+                                    </div>
+                                </div>
+                                </div>
+                                <button id="btn-withdraw-max" class="h-[60px] px-5 shrink-0 bg-emerald-900/40 text-emerald-400 hover:bg-emerald-800/60 font-black uppercase text-xs rounded-xl transition-all duration-300 border border-emerald-500/30 shadow-lg hover:shadow-[0_0_15px_rgba(16,185,129,0.2)]" data-i18n="app.withdraw_max">MAX</button>
+                            </div>
+                        </div>
+                        
+                        <button id="btn-withdraw-submit" class="w-full bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-black py-4 px-6 rounded-xl transition-all duration-300 shadow-[0_0_20px_rgba(16,185,129,0.4)] active:scale-[0.98] uppercase tracking-widest relative overflow-hidden">
+                            <div class="absolute inset-0 bg-white/20 translate-y-full hover:translate-y-0 transition-transform duration-300 ease-out"></div>
+                            <span class="relative z-10" data-i18n="app.withdraw_submit">Withdraw</span>
+                        </button>
+                    </div>
+
+                    <h3 class="text-xs font-black mb-4 text-gray-500 uppercase tracking-widest flex items-center gap-2 mt-10">
+                        <div class="h-px flex-1 bg-gradient-to-r from-gray-800 to-transparent"></div>
+                        <span data-i18n="app.withdraw_history">История выводов</span>
+                        <div class="h-px flex-1 bg-gradient-to-l from-gray-800 to-transparent"></div>
+                    </h3>
+                    <div id="history-withdrawals" class="space-y-3">
+                        <!-- Items -->
+                    </div>
+                </div>
+
+                <!-- TAB 3: CONVERT -->
+                <div id="wallet-tab-convert" class="wallet-tab-content hidden pb-6 animate-slide-up-fade">
+                    <div class="relative overflow-hidden bg-gradient-to-br from-purple-900/40 to-fuchsia-900/20 border border-purple-500/30 rounded-[2rem] p-6 text-center mb-8 shadow-[0_0_30px_rgba(168,85,247,0.15)] group">
+                        <div class="absolute -left-10 -top-10 w-32 h-32 bg-purple-500/20 blur-3xl rounded-full mix-blend-screen group-hover:bg-purple-400/30 transition-colors duration-700"></div>
+                        <div class="absolute -right-10 -bottom-10 w-32 h-32 bg-fuchsia-500/20 blur-3xl rounded-full mix-blend-screen group-hover:bg-fuchsia-400/30 transition-colors duration-700"></div>
+                        
+                        <div class="relative z-10 text-[10px] text-purple-200/70 font-black uppercase tracking-widest mb-2" data-i18n="app.convert_mining_balance">Баланс добычи</div>
+                        <div class="relative z-10 flex items-center justify-center gap-2">
+                            <span class="text-4xl sm:text-5xl font-mono font-light text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.3)] tracking-tight" id="wallet-convert-balance">0.0000</span> 
+                            <div class="bg-purple-500/10 p-1.5 rounded-xl border border-purple-500/20 shadow-inner mt-1 flex items-center justify-center"><div class="relative w-6 h-6 inline-block align-middle shrink-0"><div class="w-full h-full rounded-full bg-emerald-900/40 flex items-center justify-center border border-emerald-500/40 shadow-[0_0_5px_rgba(16,185,129,0.3)]"><svg class="w-3.5 h-3.5" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M20 40C31.0457 40 40 31.0457 40 20C40 8.9543 31.0457 0 20 0C8.9543 0 0 8.9543 0 20C0 31.0457 8.9543 40 20 40Z" fill="#26A17B"/><path d="M22.9248 18.0673H28.4348V13.8223H11.5648V18.0673H17.0748V31.6443H22.9248V18.0673Z" fill="white"/><path d="M20 23.3773C25.4638 23.3773 29.8938 22.0673 29.8938 20.4523C29.8938 18.8373 25.4638 17.5273 20 17.5273C14.5362 17.5273 10.1062 18.8373 10.1062 20.4523C10.1062 22.0673 14.5362 23.3773 20 23.3773Z" stroke="white" stroke-width="2"/></svg></div><div class="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-gray-900 border-[1px] border-gray-800 flex items-center justify-center z-20 shadow-[0_0_3px_rgba(0,152,234,0.5)]"><svg class="w-full h-full" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M14 28C21.732 28 28 21.732 28 14C28 6.26801 21.732 0 14 0C6.26801 0 0 6.26801 0 14C0 21.732 6.26801 28 14 28Z" fill="#0098EA"/><path d="M18.8453 8.4H9.15461C8.30396 8.4 7.77884 9.37128 8.22055 10.096L13.0659 18.0494C13.4359 18.6568 14.5641 18.6568 14.9341 18.0494L19.7794 10.096C20.2211 9.37128 19.696 8.4 18.8453 8.4Z" fill="white"/><path d="M14 16.5161L9.62341 9.42944H18.3766L14 16.5161Z" fill="#0098EA"/></svg></div></div></div>
+                        </div>
+                    </div>
+                    
+                    <h2 class="text-xl font-black mb-2 text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-fuchsia-400" data-i18n="app.convert_title">Конвертировать в депозит</h2>
+                    <p class="text-xs text-gray-400 mb-8 leading-relaxed font-medium" data-i18n="app.convert_desc">Перенесите намайненный USDT на депозитный баланс для покупки дронов.</p>
+
+                    <div class="space-y-5 mb-8">
+                        <div class="group relative">
+                            <label class="text-[10px] text-gray-500 font-black uppercase tracking-wider mb-1.5 flex items-center gap-1.5 pl-1 transition-colors group-focus-within:text-purple-400"><span data-i18n="app.withdraw_amount_label">Сумма</span><div class="relative w-3.5 h-3.5 inline-block shrink-0"><div class="w-full h-full rounded-full bg-emerald-900/40 flex items-center justify-center border border-emerald-500/40 shadow-[0_0_5px_rgba(16,185,129,0.3)]"><svg class="w-2 h-2" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M20 40C31.0457 40 40 31.0457 40 20C40 8.9543 31.0457 0 20 0C8.9543 0 0 8.9543 0 20C0 31.0457 8.9543 40 20 40Z" fill="#26A17B"/><path d="M22.9248 18.0673H28.4348V13.8223H11.5648V18.0673H17.0748V31.6443H22.9248V18.0673Z" fill="white"/><path d="M20 23.3773C25.4638 23.3773 29.8938 22.0673 29.8938 20.4523C29.8938 18.8373 25.4638 17.5273 20 17.5273C14.5362 17.5273 10.1062 18.8373 10.1062 20.4523C10.1062 22.0673 14.5362 23.3773 20 23.3773Z" stroke="white" stroke-width="2"/></svg></div><div class="absolute -bottom-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-gray-900 border-[0.5px] border-gray-800 flex items-center justify-center z-20 shadow-[0_0_3px_rgba(0,152,234,0.5)]"><svg class="w-full h-full" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M14 28C21.732 28 28 21.732 28 14C28 6.26801 21.732 0 14 0C6.26801 0 0 6.26801 0 14C0 21.732 6.26801 28 14 28Z" fill="#0098EA"/><path d="M18.8453 8.4H9.15461C8.30396 8.4 7.77884 9.37128 8.22055 10.096L13.0659 18.0494C13.4359 18.6568 14.5641 18.6568 14.9341 18.0494L19.7794 10.096C20.2211 9.37128 19.696 8.4 18.8453 8.4Z" fill="white"/><path d="M14 16.5161L9.62341 9.42944H18.3766L14 16.5161Z" fill="#0098EA"/></svg></div></div></label>
+                            <div class="flex items-center gap-2">
+                                <div class="relative flex-1">
+                                    <input type="number" id="convert-amount" class="w-full bg-gray-900/80 backdrop-blur-sm border border-gray-700 group-focus-within:border-purple-500/50 rounded-xl p-4 pl-12 font-mono text-white placeholder-gray-600 shadow-inner focus:outline-none transition-colors duration-300 text-lg" placeholder="0.0000">
+                                    <div class="absolute left-4 top-1/2 transform -translate-y-1/2 z-10">
+                                    <div class="relative w-5 h-5 flex items-center justify-center shrink-0">
+                                        <div class="w-full h-full rounded-full bg-emerald-900/40 flex items-center justify-center border border-emerald-500/40 shadow-[0_0_5px_rgba(16,185,129,0.3)]">
+                                            <svg class="w-3 h-3" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M20 40C31.0457 40 40 31.0457 40 20C40 8.9543 31.0457 0 20 0C8.9543 0 0 8.9543 0 20C0 31.0457 8.9543 40 20 40Z" fill="#26A17B"/><path d="M22.9248 18.0673H28.4348V13.8223H11.5648V18.0673H17.0748V31.6443H22.9248V18.0673Z" fill="white"/><path d="M20 23.3773C25.4638 23.3773 29.8938 22.0673 29.8938 20.4523C29.8938 18.8373 25.4638 17.5273 20 17.5273C14.5362 17.5273 10.1062 18.8373 10.1062 20.4523C10.1062 22.0673 14.5362 23.3773 20 23.3773Z" stroke="white" stroke-width="2"/></svg>
+                                        </div>
+                                        <div class="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-gray-900 border-[1px] border-gray-800 flex items-center justify-center z-20 shadow-[0_0_3px_rgba(0,152,234,0.5)]">
+                                            <svg class="w-full h-full" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M14 28C21.732 28 28 21.732 28 14C28 6.26801 21.732 0 14 0C6.26801 0 0 6.26801 0 14C0 21.732 6.26801 28 14 28Z" fill="#0098EA"/><path d="M18.8453 8.4H9.15461C8.30396 8.4 7.77884 9.37128 8.22055 10.096L13.0659 18.0494C13.4359 18.6568 14.5641 18.6568 14.9341 18.0494L19.7794 10.096C20.2211 9.37128 19.696 8.4 18.8453 8.4Z" fill="white"/><path d="M14 16.5161L9.62341 9.42944H18.3766L14 16.5161Z" fill="#0098EA"/></svg>
+                                        </div>
+                                    </div>
+                                </div>
+                                </div>
+                                <button id="btn-convert-all" class="h-[60px] px-5 shrink-0 bg-purple-900/40 text-purple-400 hover:bg-purple-800/60 font-black uppercase text-xs rounded-xl transition-all duration-300 border border-purple-500/30 shadow-lg hover:shadow-[0_0_15px_rgba(168,85,247,0.2)]" data-i18n="app.convert_all">Всё</button>
+                            </div>
+                        </div>
+                        
+                        <button id="btn-convert-submit" class="w-full bg-gradient-to-r from-purple-600 to-fuchsia-500 hover:from-purple-500 hover:to-fuchsia-400 text-white font-black py-4 px-6 rounded-xl transition-all duration-300 shadow-[0_0_20px_rgba(168,85,247,0.4)] active:scale-[0.98] uppercase tracking-widest relative overflow-hidden">
+                            <div class="absolute inset-0 bg-white/20 translate-y-full hover:translate-y-0 transition-transform duration-300 ease-out"></div>
+                            <span class="relative z-10" data-i18n="app.convert_submit">Конвертировать</span>
+                        </button>
+                    </div>
+
+                    <h3 class="text-xs font-black mb-4 text-gray-500 uppercase tracking-widest flex items-center gap-2 mt-10">
+                        <div class="h-px flex-1 bg-gradient-to-r from-gray-800 to-transparent"></div>
+                        <span data-i18n="app.convert_history">История конвертаций</span>
+                        <div class="h-px flex-1 bg-gradient-to-l from-gray-800 to-transparent"></div>
+                    </h3>
+                    <div id="history-conversions" class="space-y-3">
+                        <!-- Items -->
+                    </div>
+                </div>
+
+            </div>
+            <!-- REFERRAL VIEW -->
+            <div id="view-referral" class="view-section flex-col p-5 min-h-full pb-24">
+                <div class="flex justify-between items-end mb-6">
+                    <h2 class="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-fuchsia-500 drop-shadow-sm" data-i18n="app.ref_invite">Пригласи друзей</h2>
+                </div>
+                
+                <!-- Hero Info Card -->
+                <div class="relative overflow-hidden bg-gradient-to-br from-indigo-900/40 to-purple-900/20 border border-indigo-500/30 rounded-[2rem] p-6 mb-8 shadow-[0_0_30px_rgba(99,102,241,0.15)] group">
+                    <div class="absolute -left-10 -top-10 w-32 h-32 bg-indigo-500/20 blur-3xl rounded-full mix-blend-screen group-hover:bg-indigo-400/30 transition-colors duration-700"></div>
+                    <div class="absolute -right-10 -bottom-10 w-32 h-32 bg-purple-500/20 blur-3xl rounded-full mix-blend-screen group-hover:bg-purple-400/30 transition-colors duration-700"></div>
+                    
+                    <div class="relative z-10 flex items-start gap-4">
+                        <div class="w-12 h-12 rounded-2xl bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center shrink-0 shadow-[inset_0_0_15px_rgba(99,102,241,0.4)]">
+                            <svg class="w-6 h-6 text-indigo-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+                        </div>
+                        <div>
+                            <p class="text-[13px] text-indigo-100/90 leading-relaxed font-medium drop-shadow-sm" data-i18n="app.ref_desc_new">
+                                Зарабатывай 7% с прямых рефералов и 5% с их рефералов с каждого депозита!
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Stats Grid -->
+                <div class="grid grid-cols-2 gap-3 mb-8">
+                    <div class="bg-gray-900/60 backdrop-blur-md border border-gray-800/80 rounded-2xl p-4 flex flex-col items-center justify-center shadow-inner relative overflow-hidden group">
+                        <div class="absolute inset-0 bg-gradient-to-b from-blue-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                        <div class="text-[9px] text-gray-500 uppercase font-black tracking-widest mb-1.5" data-i18n="app.ref_lvl1_title">Уровень 1 (7%)</div>
+                        <div class="flex items-center gap-2">
+                            <span class="w-2 h-2 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.6)] animate-pulse"></span>
+                            <div class="text-2xl font-mono font-black text-white drop-shadow-sm" id="ref-lvl1-count">0</div>
+                        </div>
+                    </div>
+                    <div class="bg-gray-900/60 backdrop-blur-md border border-gray-800/80 rounded-2xl p-4 flex flex-col items-center justify-center shadow-inner relative overflow-hidden group">
+                        <div class="absolute inset-0 bg-gradient-to-b from-purple-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                        <div class="text-[9px] text-gray-500 uppercase font-black tracking-widest mb-1.5" data-i18n="app.ref_lvl2_title">Уровень 2 (5%)</div>
+                        <div class="flex items-center gap-2">
+                            <span class="w-2 h-2 rounded-full bg-purple-500 shadow-[0_0_8px_rgba(168,85,247,0.6)] animate-pulse"></span>
+                            <div class="text-2xl font-mono font-black text-white drop-shadow-sm" id="ref-lvl2-count">0</div>
+                        </div>
+                    </div>
+                    <div class="col-span-2 bg-gradient-to-br from-emerald-900/40 to-teal-900/20 border border-emerald-500/30 rounded-2xl p-5 text-center shadow-[0_0_20px_rgba(16,185,129,0.1)] relative overflow-hidden">
+                        <div class="absolute -right-4 -top-4 w-24 h-24 bg-emerald-500/10 blur-2xl rounded-full"></div>
+                        <div class="text-[10px] text-emerald-200/70 uppercase font-black tracking-widest mb-2 relative z-10" data-i18n="app.ref_total_profit">Всего прибыли</div>
+                        <div class="text-3xl font-mono font-light text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.3)] tracking-tight relative z-10 flex items-center justify-center gap-2" id="ref-total-profit">0.0000</div>
+                    </div>
+                </div>
+
+                <!-- Link Block -->
+                <div class="space-y-3 mb-8">
+                    <label class="text-[10px] text-gray-500 font-black uppercase tracking-wider pl-1" data-i18n="app.ref_link_label">Ваша ссылка для приглашения</label>
+                    <div class="bg-gray-900/80 backdrop-blur-sm border border-gray-700 rounded-xl p-4 flex items-center shadow-inner relative group">
+                        <div class="absolute inset-0 bg-gradient-to-r from-indigo-500/0 via-indigo-500/5 to-purple-500/0 opacity-0 group-hover:opacity-100 transition-opacity rounded-xl pointer-events-none"></div>
+                        <div class="text-xs sm:text-sm text-indigo-300 font-mono truncate mr-2 w-full tracking-wider relative z-10 font-medium drop-shadow-sm" id="ref-link-display">https://t.me/TON_USDT_Miner_Bot?start=...</div>
+                    </div>
+                    <div class="flex gap-3 pt-1">
+                        <button id="btn-ref-copy" class="flex-1 bg-gray-800/80 hover:bg-gray-700 border border-gray-600 rounded-xl py-3.5 flex justify-center items-center gap-2 transition-all active:scale-95 text-gray-300 font-bold text-[10px] sm:text-xs uppercase tracking-wider shadow-lg">
+                            <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                            <span data-i18n="app.ref_copy">Копировать</span>
+                        </button>
+                        <button id="btn-ref-share" class="flex-[1.5] bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 rounded-xl py-3.5 flex justify-center items-center gap-2 transition-all shadow-[0_0_20px_rgba(99,102,241,0.4)] active:scale-95 text-white font-black text-[10px] sm:text-xs uppercase tracking-widest relative overflow-hidden group">
+                            <div class="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-out"></div>
+                            <svg class="w-4 h-4 relative z-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"></path></svg>
+                            <span class="relative z-10" data-i18n="app.ref_share">Поделиться</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Tabs -->
+                <div class="flex bg-gray-900/80 backdrop-blur-xl border border-gray-800 p-1.5 rounded-2xl mb-6 shrink-0 relative z-10 shadow-[0_10px_30px_rgba(0,0,0,0.5)]">
+                    <button class="ref-tab-btn active group flex-1 py-2.5 text-[10px] sm:text-xs font-black uppercase tracking-wider rounded-xl transition-all duration-300 text-white bg-gradient-to-r from-indigo-600 to-purple-500 shadow-[0_0_15px_rgba(99,102,241,0.4)]" data-tab="lvl1" data-i18n="app.ref_lvl1_tab">Уровень 1</button>
+                    <button class="ref-tab-btn flex-1 py-2.5 text-[10px] sm:text-xs font-black uppercase tracking-wider rounded-xl transition-all duration-300 text-gray-400 hover:text-white hover:bg-gray-800/50" data-tab="lvl2" data-i18n="app.ref_lvl2_tab">Уровень 2</button>
+                </div>
+
+                <!-- List -->
+                <div id="ref-list" class="bg-gray-900/40 border border-gray-800/80 rounded-[2rem] p-8 flex flex-col items-center justify-center text-center shadow-inner min-h-[160px]">
+                    <div class="w-16 h-16 bg-gray-800/50 rounded-full flex items-center justify-center mb-4 border border-gray-700/50 shadow-inner">
+                        <svg class="w-8 h-8 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+                    </div>
+                    <span class="text-sm font-bold text-gray-500 uppercase tracking-widest drop-shadow-sm" data-i18n="app.no_referrals_yet">Пока нет рефералов</span>
+                </div>
+            </div>
+        </main>
+
+        <!-- Bottom Navigation -->
+        <nav class="absolute bottom-0 w-full border-t border-gray-800 bg-gray-900/50 backdrop-blur-xl pb-safe z-30">
+            <ul class="flex justify-around items-center h-16 px-1">
+                <li class="nav-item flex-1 flex flex-col items-center justify-center cursor-pointer py-2 relative" data-target="view-hangar">
+                    <svg class="w-6 h-6 nav-icon mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+                    <span class="text-[10px] font-medium" data-i18n="app.nav_hangar">Ангар</span>
+                </li>
+                <li class="nav-item flex-1 flex flex-col items-center justify-center cursor-pointer py-2" data-target="view-shop">
+                    <svg class="w-6 h-6 nav-icon mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path></svg>
+                    <span class="text-[10px] font-medium" data-i18n="app.nav_shop">Магазин</span>
+                </li>
+                <li class="nav-item active flex-1 flex flex-col items-center justify-center cursor-pointer py-2" data-target="view-mining">
+                    <div class="relative">
+                        <div class="absolute inset-0 bg-blue-500 blur-md rounded-full opacity-20"></div>
+                        <svg class="w-7 h-7 nav-icon mb-1 relative" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    </div>
+                    <span class="text-[10px] font-bold" data-i18n="app.nav_mining">Майнинг</span>
+                </li>
+                <li class="nav-item flex-1 flex flex-col items-center justify-center cursor-pointer py-2" data-target="view-wallet">
+                    <svg class="w-6 h-6 nav-icon mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path></svg>
+                    <span class="text-[10px] font-medium" data-i18n="app.nav_wallet">Кошелек</span>
+                </li>
+                <li class="nav-item flex-1 flex flex-col items-center justify-center cursor-pointer py-2" data-target="view-referral">
+                    <svg class="w-6 h-6 nav-icon mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+                    <span class="text-[10px] font-medium" data-i18n="app.nav_referral">Рефералы</span>
+                </li>
+            </ul>
+        </nav>
+
+        <!-- Ad Modal -->
+        <div id="modal-ad" class="fixed inset-0 bg-black/95 backdrop-blur-xl z-[100] hidden flex-col items-center justify-center p-4 transition-opacity duration-300">
+            <div class="bg-gray-900 border border-gray-800 rounded-[2rem] p-8 w-full max-w-sm text-center shadow-[0_0_50px_rgba(0,0,0,0.8)]">
+                <div class="w-16 h-16 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto mb-6"></div>
+                <h3 class="text-xl font-bold text-white mb-2" data-i18n="app.ad_watching">Получаем Airdrop...</h3>
+                <p class="text-indigo-400 font-mono text-lg">Осталось: <span id="ad-timer">3</span> сек</p>
+            </div>
+        </div>
+
+        <!-- Gacha Modal Overlay -->
+        <div id="modal-overlay" class="fixed inset-0 bg-black/95 backdrop-blur-xl z-50 hidden flex-col items-center justify-center p-4 opacity-0 transition-opacity duration-300">
+            <div id="modal-flash" class="absolute inset-0 bg-white z-[60] opacity-0 pointer-events-none transition-opacity duration-[400ms]"></div>
+            <div class="gacha-rays hidden" id="gacha-rays"></div>
+            <div id="modal-content" class="gacha-item bg-gray-900 border border-gray-800 rounded-[2.5rem] p-8 w-full max-w-sm flex flex-col items-center text-center shadow-[0_0_50px_rgba(0,0,0,0.8)] relative overflow-hidden transition-all duration-300">
+                <!-- Content injected dynamically -->
+            </div>
+        </div>
+        <!-- ADMIN PANEL OVERLAY -->
+        <div id="view-admin" class="absolute inset-0 z-[70] bg-gray-950 flex-col hidden pb-safe overflow-hidden">
+            <header class="flex justify-between items-center p-4 border-b border-gray-800 bg-gray-900/95 backdrop-blur-md shrink-0 shadow-[0_10px_30px_rgba(0,0,0,0.5)] z-20 relative">
+                <h2 class="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-red-400 to-orange-500 drop-shadow-sm" data-i18n="app.admin_title">Админ-панель</h2>
+                <button id="btn-close-admin" class="w-8 h-8 bg-gray-800 rounded-full flex items-center justify-center text-gray-400 hover:text-white transition active:scale-95 shadow-[inset_0_0_10px_rgba(0,0,0,0.5)] border border-gray-700">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </header>
+
+            <div class="flex-1 overflow-y-auto p-4 space-y-6 scrollbar-hide relative z-10" id="admin-content-area">
+                <!-- Dashboard Tab -->
+                <div id="admin-tab-dashboard" class="admin-tab-content block space-y-5">
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 shadow-inner">
+                            <div class="text-[9px] text-gray-500 font-bold uppercase mb-1 tracking-wider" data-i18n="app.admin_stat_users">Всего юзеров</div>
+                            <div class="text-2xl font-mono font-black text-white drop-shadow" id="admin-stat-users">0</div>
+                        </div>
+                        <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 shadow-inner">
+                            <div class="text-[9px] text-gray-500 font-bold uppercase mb-1 tracking-wider" data-i18n="app.admin_stat_miners">Активных майнеров</div>
+                            <div class="text-2xl font-mono font-black text-blue-400 drop-shadow" id="admin-stat-miners">0</div>
+                        </div>
+                        <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 shadow-inner">
+                            <div class="text-[9px] text-gray-500 font-bold uppercase mb-1 tracking-wider" data-i18n="app.admin_stat_deposits">Сумма депозитов</div>\n                            <div class="text-lg font-mono font-black text-emerald-400 drop-shadow flex items-center gap-1.5"><span id="admin-stat-deposits">0.00</span> <div class="relative w-4 h-4 inline-block shrink-0"><div class="w-full h-full rounded-full bg-emerald-900/40 flex items-center justify-center border border-emerald-500/40 shadow-[0_0_5px_rgba(16,185,129,0.3)]"><svg class="w-2.5 h-2.5" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M20 40C31.0457 40 40 31.0457 40 20C40 8.9543 31.0457 0 20 0C8.9543 0 0 8.9543 0 20C0 31.0457 8.9543 40 20 40Z" fill="#26A17B"/><path d="M22.9248 18.0673H28.4348V13.8223H11.5648V18.0673H17.0748V31.6443H22.9248V18.0673Z" fill="white"/><path d="M20 23.3773C25.4638 23.3773 29.8938 22.0673 29.8938 20.4523C29.8938 18.8373 25.4638 17.5273 20 17.5273C14.5362 17.5273 10.1062 18.8373 10.1062 20.4523C10.1062 22.0673 14.5362 23.3773 20 23.3773Z" stroke="white" stroke-width="2"/></svg></div><div class="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-gray-900 border-[0.5px] border-gray-800 flex items-center justify-center z-20 shadow-[0_0_3px_rgba(0,152,234,0.5)]"><svg class="w-full h-full" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M14 28C21.732 28 28 21.732 28 14C28 6.26801 21.732 0 14 0C6.26801 0 0 6.26801 0 14C0 21.732 6.26801 28 14 28Z" fill="#0098EA"/><path d="M18.8453 8.4H9.15461C8.30396 8.4 7.77884 9.37128 8.22055 10.096L13.0659 18.0494C13.4359 18.6568 14.5641 18.6568 14.9341 18.0494L19.7794 10.096C20.2211 9.37128 19.696 8.4 18.8453 8.4Z" fill="white"/><path d="M14 16.5161L9.62341 9.42944H18.3766L14 16.5161Z" fill="#0098EA"/></svg></div></div></div>
+                        </div>
+                        <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 shadow-inner">
+                            <div class="text-[9px] text-gray-500 font-bold uppercase mb-1 tracking-wider" data-i18n="app.admin_stat_withdraws">Выведено</div>\n                            <div class="text-lg font-mono font-black text-red-400 drop-shadow flex items-center gap-1.5"><span id="admin-stat-withdraws">0.00</span> <div class="relative w-4 h-4 inline-block shrink-0"><div class="w-full h-full rounded-full bg-emerald-900/40 flex items-center justify-center border border-emerald-500/40 shadow-[0_0_5px_rgba(16,185,129,0.3)]"><svg class="w-2.5 h-2.5" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M20 40C31.0457 40 40 31.0457 40 20C40 8.9543 31.0457 0 20 0C8.9543 0 0 8.9543 0 20C0 31.0457 8.9543 40 20 40Z" fill="#26A17B"/><path d="M22.9248 18.0673H28.4348V13.8223H11.5648V18.0673H17.0748V31.6443H22.9248V18.0673Z" fill="white"/><path d="M20 23.3773C25.4638 23.3773 29.8938 22.0673 29.8938 20.4523C29.8938 18.8373 25.4638 17.5273 20 17.5273C14.5362 17.5273 10.1062 18.8373 10.1062 20.4523C10.1062 22.0673 14.5362 23.3773 20 23.3773Z" stroke="white" stroke-width="2"/></svg></div><div class="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-gray-900 border-[0.5px] border-gray-800 flex items-center justify-center z-20 shadow-[0_0_3px_rgba(0,152,234,0.5)]"><svg class="w-full h-full" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M14 28C21.732 28 28 21.732 28 14C28 6.26801 21.732 0 14 0C6.26801 0 0 6.26801 0 14C0 21.732 6.26801 28 14 28Z" fill="#0098EA"/><path d="M18.8453 8.4H9.15461C8.30396 8.4 7.77884 9.37128 8.22055 10.096L13.0659 18.0494C13.4359 18.6568 14.5641 18.6568 14.9341 18.0494L19.7794 10.096C20.2211 9.37128 19.696 8.4 18.8453 8.4Z" fill="white"/><path d="M14 16.5161L9.62341 9.42944H18.3766L14 16.5161Z" fill="#0098EA"/></svg></div></div></div>
+                        </div>
+                    </div>
+
+                    <div class="bg-gray-900/30 rounded-xl p-4 border border-gray-800/50">
+                        <h3 class="text-xs font-black text-gray-400 uppercase tracking-widest mb-4" data-i18n="app.admin_recent_activity">Последние действия</h3>
+                        <div id="admin-recent-activity" class="space-y-2"></div>
+                    </div>
+                </div>
+
+                <!-- Requests Tab (Combines Deposits & Withdraws) -->
+                <div id="admin-tab-requests" class="admin-tab-content hidden space-y-8">
+                    <div class="space-y-3">
+                        <h3 class="text-xs font-black text-gray-400 uppercase tracking-widest pl-1 flex items-center gap-2"><div class="w-1.5 h-1.5 rounded-full bg-emerald-500"></div> <span data-i18n="app.admin_pending_deposits">Ожидают подтверждения (Пополнения)</span></h3>
+                        <div id="admin-list-deposits" class="space-y-3"></div>
+                    </div>
+                    <div class="space-y-3">
+                        <h3 class="text-xs font-black text-gray-400 uppercase tracking-widest pl-1 flex items-center gap-2"><div class="w-1.5 h-1.5 rounded-full bg-red-500"></div> <span data-i18n="app.admin_pending_withdraws">Заявки на вывод</span></h3>
+                        <div id="admin-list-withdraws" class="space-y-3"></div>
+                    </div>
+                </div>
+
+                <!-- Management Tab -->
+                <div id="admin-tab-management" class="admin-tab-content hidden space-y-6">
+                    <div class="space-y-3">
+                        <h3 class="text-xs font-black text-gray-400 uppercase tracking-widest pl-1">Настройки проекта</h3>
+                        <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 space-y-4 shadow-inner">
+                            <div class="flex justify-between items-center border-b border-gray-800 pb-3">
+                                <span class="text-sm text-gray-300 font-bold">Технические работы</span>
+                                <button class="w-11 h-6 bg-gray-700 rounded-full relative transition-colors duration-300 focus:outline-none"><span class="absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform duration-300"></span></button>
+                            </div>
+                            <div class="flex justify-between items-center border-b border-gray-800 pb-3">
+                                <span class="text-sm text-gray-300 font-bold">Прием депозитов</span>
+                                <button class="w-11 h-6 bg-emerald-600 rounded-full relative transition-colors duration-300 focus:outline-none"><span class="absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform duration-300 translate-x-5"></span></button>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <span class="text-sm text-gray-300 font-bold">Вывод средств</span>
+                                <button class="w-11 h-6 bg-emerald-600 rounded-full relative transition-colors duration-300 focus:outline-none"><span class="absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform duration-300 translate-x-5"></span></button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="space-y-3">
+                        <h3 class="text-xs font-black text-gray-400 uppercase tracking-widest pl-1">Реферальная система</h3>
+                        <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 space-y-4 shadow-inner">
+                            <div class="flex flex-col gap-1.5">
+                                <label class="text-[10px] text-gray-500 uppercase font-bold">Бонус уровень 1 (%)</label>
+                                <input type="number" value="7" class="bg-gray-800 border border-gray-700 rounded-lg p-3 text-white font-mono focus:outline-none focus:border-blue-500 shadow-inner">
+                            </div>
+                            <div class="flex flex-col gap-1.5">
+                                <label class="text-[10px] text-gray-500 uppercase font-bold">Бонус уровень 2 (%)</label>
+                                <input type="number" value="5" class="bg-gray-800 border border-gray-700 rounded-lg p-3 text-white font-mono focus:outline-none focus:border-blue-500 shadow-inner">
+                            </div>
+                            <button class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3.5 rounded-lg mt-2 transition text-sm uppercase tracking-wider" data-i18n="app.admin_btn_save">Сохранить</button>
+                        </div>
+                    </div>
+
+                    <div class="space-y-3">
+                        <h3 class="text-xs font-black text-gray-400 uppercase tracking-widest pl-1" data-i18n="app.admin_miner_rates">Доходность майнеров (USDT в день)</h3>
+                        <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 space-y-3 shadow-inner">
+                            <div class="grid grid-cols-2 gap-3">
+                                <div class="flex flex-col gap-1.5">
+                                    <label class="text-[9px] text-gray-400 uppercase font-bold" data-i18n="app.rarity_free">Бесплатный</label>
+                                    <input type="number" step="0.01" value="0.05" class="bg-gray-800 border border-gray-700 rounded-lg p-2.5 text-white font-mono text-xs focus:outline-none focus:border-gray-500 shadow-inner">
+                                </div>
+                                <div class="flex flex-col gap-1.5">
+                                    <label class="text-[9px] text-green-400 uppercase font-bold" data-i18n="app.rarity_common">Обычный</label>
+                                    <input type="number" step="0.01" value="0.20" class="bg-gray-800 border border-gray-700 rounded-lg p-2.5 text-white font-mono text-xs focus:outline-none focus:border-green-500 shadow-inner">
+                                </div>
+                                <div class="flex flex-col gap-1.5">
+                                    <label class="text-[9px] text-blue-400 uppercase font-bold" data-i18n="app.rarity_uncommon">Необычный</label>
+                                    <input type="number" step="0.01" value="0.75" class="bg-gray-800 border border-gray-700 rounded-lg p-2.5 text-white font-mono text-xs focus:outline-none focus:border-blue-500 shadow-inner">
+                                </div>
+                                <div class="flex flex-col gap-1.5">
+                                    <label class="text-[9px] text-purple-400 uppercase font-bold" data-i18n="app.rarity_rare">Редкий</label>
+                                    <input type="number" step="0.01" value="2.50" class="bg-gray-800 border border-gray-700 rounded-lg p-2.5 text-white font-mono text-xs focus:outline-none focus:border-purple-500 shadow-inner">
+                                </div>
+                                <div class="flex flex-col gap-1.5">
+                                    <label class="text-[9px] text-pink-400 uppercase font-bold" data-i18n="app.rarity_epic">Эпический</label>
+                                    <input type="number" step="0.01" value="8.00" class="bg-gray-800 border border-gray-700 rounded-lg p-2.5 text-white font-mono text-xs focus:outline-none focus:border-pink-500 shadow-inner">
+                                </div>
+                                <div class="flex flex-col gap-1.5">
+                                    <label class="text-[9px] text-yellow-400 uppercase font-bold" data-i18n="app.rarity_legendary">Легендарный</label>
+                                    <input type="number" step="0.01" value="30.00" class="bg-gray-800 border border-gray-700 rounded-lg p-2.5 text-white font-mono text-xs focus:outline-none focus:border-yellow-500 shadow-inner">
+                                </div>
+                            </div>
+                            <button class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3.5 rounded-lg mt-2 transition text-sm uppercase tracking-wider" data-i18n="app.admin_btn_save">Сохранить</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Users Tab -->
+                <div id="admin-tab-users" class="admin-tab-content hidden space-y-4">
+                    <div class="relative">
+                        <input type="text" id="admin-search-users" class="w-full bg-gray-900 border border-gray-800 rounded-xl p-3.5 text-sm text-white focus:outline-none focus:border-red-500 placeholder-gray-600 shadow-inner font-mono" data-i18n-placeholder="app.admin_search_users" placeholder="Поиск по @user / TG ID">
+                        <svg class="w-5 h-5 absolute right-4 top-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                    </div>
+                    <div id="admin-list-users" class="space-y-3"></div>
+                </div>
+            </div>
+
+            <!-- Bottom Navigation for Admin -->
+            <nav class="flex justify-around items-center p-2 border-t border-gray-800/80 bg-gray-900/95 backdrop-blur-xl shrink-0 shadow-[0_-10px_30px_rgba(0,0,0,0.6)] z-30 pb-safe relative">
+                <button class="admin-tab-btn active group flex-1 flex flex-col items-center justify-center py-2.5 mx-1 rounded-2xl transition-all duration-300 text-red-400 bg-red-500/10 shadow-[inset_0_0_15px_rgba(239,68,68,0.15)] border border-red-500/20" data-tab="dashboard">
+                    <svg class="w-6 h-6 mb-1 drop-shadow-[0_0_5px_rgba(239,68,68,0.5)] transition-transform group-hover:-translate-y-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>
+                    <span class="text-[10px] font-bold uppercase tracking-wider" data-i18n="app.admin_tab_dashboard">Дашборд</span>
+                </button>
+                <button class="admin-tab-btn group flex-1 flex flex-col items-center justify-center py-2.5 mx-1 rounded-2xl transition-all duration-300 text-gray-500 hover:text-gray-300 hover:bg-gray-800/50 border border-transparent" data-tab="requests">
+                    <svg class="w-6 h-6 mb-1 transition-transform group-hover:-translate-y-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                    <span class="text-[10px] font-bold uppercase tracking-wider" data-i18n="app.admin_tab_requests">Заявки</span>
+                </button>
+                <button class="admin-tab-btn group flex-1 flex flex-col items-center justify-center py-2.5 mx-1 rounded-2xl transition-all duration-300 text-gray-500 hover:text-gray-300 hover:bg-gray-800/50 border border-transparent" data-tab="management">
+                    <svg class="w-6 h-6 mb-1 transition-transform group-hover:-translate-y-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                    <span class="text-[10px] font-bold uppercase tracking-wider" data-i18n="app.admin_tab_management">Настройки</span>
+                </button>
+                <button class="admin-tab-btn group flex-1 flex flex-col items-center justify-center py-2.5 mx-1 rounded-2xl transition-all duration-300 text-gray-500 hover:text-gray-300 hover:bg-gray-800/50 border border-transparent" data-tab="users">
+                    <svg class="w-6 h-6 mb-1 transition-transform group-hover:-translate-y-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+                    <span class="text-[10px] font-bold uppercase tracking-wider" data-i18n="app.admin_tab_users">Пользователи</span>
+                </button>
+            </nav>
+
+            <!-- Admin User Edit Modal -->
+            <div id="admin-modal-edit-user" class="absolute inset-0 z-[80] bg-black/80 flex-col items-center justify-center hidden p-4 backdrop-blur-sm">
+                <div class="bg-gray-900 border border-gray-700 rounded-3xl p-6 w-full max-w-sm shadow-[0_0_50px_rgba(0,0,0,0.8)] relative max-h-[95vh] flex flex-col">
+                    <h3 class="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400 mb-5 shrink-0">Изменить пользователя</h3>
+                    
+                    <div class="overflow-y-auto scrollbar-hide flex-1 space-y-5 pr-1 w-full">
+                        <div>
+                            <label class="text-[10px] text-gray-500 uppercase font-bold mb-1.5 block">TG ID</label>
+                            <input type="text" id="admin-edit-memo" class="w-full bg-gray-950 border border-gray-800 rounded-xl p-3 text-gray-500 font-mono text-sm shadow-inner" disabled>
+                        </div>
+                        
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="text-[10px] text-gray-500 uppercase font-bold mb-1.5 block">Депозит (USDT)</label>
+                                <input type="number" id="admin-edit-balance" step="0.01" class="w-full bg-gray-800 border border-gray-700 rounded-xl p-3 text-white font-mono text-sm focus:border-blue-500 focus:outline-none shadow-inner">
+                            </div>
+                            <div>
+                                <label class="text-[10px] text-gray-500 uppercase font-bold mb-1.5 block">Добыча (USDT)</label>
+                                <input type="number" id="admin-edit-mining" step="0.01" class="w-full bg-gray-800 border border-gray-700 rounded-xl p-3 text-white font-mono text-sm focus:border-emerald-500 focus:outline-none shadow-inner">
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <label class="text-[10px] text-gray-500 uppercase font-bold mb-2 block">Майнеры пользователя</label>
+                            
+                            <div id="admin-edit-miners-list" class="space-y-2 bg-gray-950/80 p-2.5 rounded-2xl border border-gray-800 min-h-[100px] max-h-[200px] overflow-y-auto scrollbar-hide shadow-inner">
+                                <!-- Injected by JS -->
+                            </div>
+                            
+                            <!-- Add Miner Form -->
+                            <div class="mt-3 p-3 bg-gray-800/40 rounded-2xl border border-gray-700/50 flex gap-2 items-center">
+                                <select id="admin-add-miner-type" class="flex-1 bg-gray-900 border border-gray-700 rounded-xl p-2.5 text-xs text-white outline-none focus:border-emerald-500 font-bold shadow-inner">
+                                    <option value="FREE" class="text-gray-400">Бесплатный</option>
+                                    <option value="COMMON" class="text-green-400">Обычный</option>
+                                    <option value="UNCOMMON" class="text-blue-400">Необычный</option>
+                                    <option value="RARE" class="text-purple-400">Редкий</option>
+                                    <option value="EPIC" class="text-pink-400">Эпический</option>
+                                    <option value="LEGENDARY" class="text-yellow-400">Легендарный</option>
+                                </select>
+                                <button data-action="add-miner" class="bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-black py-2.5 px-4 rounded-xl text-[10px] transition uppercase tracking-wider shadow-[0_0_15px_rgba(16,185,129,0.4)] active:scale-95 shrink-0 flex items-center gap-1">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M12 4v16m8-8H4"></path></svg>
+                                    Выдать
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="flex gap-3 mt-6 shrink-0 w-full pt-4 border-t border-gray-800">
+                        <button id="btn-admin-close-edit" class="flex-1 bg-gray-800 text-gray-300 font-bold py-3.5 rounded-xl border border-gray-700 hover:bg-gray-700 hover:text-white transition active:scale-95">Отмена</button>
+                        <button id="btn-admin-save-edit" class="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold py-3.5 rounded-xl shadow-[0_0_15px_rgba(79,70,229,0.4)] transition active:scale-95">Сохранить</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="main.js"></script><script src="admin.js"></script>
+</body>
+</html>
