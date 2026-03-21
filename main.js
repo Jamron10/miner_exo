@@ -284,57 +284,61 @@ async function loadState() {
     let wakeUpInterval;
     
     try {
-        // 1. Get local persistent data (memo, history, lastUpdate)
+        // 1. Get local persistent data
         const raw = await miniappsAI.storage.getItem('exoMinerState');
         if (raw) {
             const parsed = JSON.parse(raw);
-            if (!window.tgUserFound && parsed.memo) {
-                state.memo = parsed.memo;
-            }
+            if (!window.tgUserFound && parsed.memo) state.memo = parsed.memo;
+            state.balance = parsed.balance || 0;
+            state.miningBalance = parsed.miningBalance || 0;
+            state.unclaimed = parsed.unclaimed || 0;
+            state.drones = parsed.drones || [];
+            state.hasClaimedFreeDrone = parsed.hasClaimedFreeDrone || false;
             state.lastUpdate = parsed.lastUpdate || Date.now();
             state.lastAirdropTime = parsed.lastAirdropTime || 0;
             state.history = parsed.history || { deposits: [], withdrawals: [], conversions: [] };
+            if (parsed.referrals) state.referrals = parsed.referrals;
         } else {
             await miniappsAI.storage.setItem('exoMinerState', JSON.stringify(state));
         }
 
         if (els.depositMemo) els.depositMemo.textContent = state.memo;
 
-        // 2. STRICT MONGO BACKEND FETCH
+        // 2. MONGO BACKEND FETCH (Optional, will fall back to local if failed)
         wakeUpInterval = setTimeout(() => {
             if(loadingText) loadingText.textContent = window.miniappI18n ? window.miniappI18n.t('app.loading_wakeup') : "Пробуждаем сервер базы данных (Render)... Это может занять до 50 секунд.";
         }, 3000);
         
-        const res = await fetch(`${BACKEND_URL}/api/user/${state.memo}`);
-        
-        if (res.status === 404) {
-            console.log("User not found in DB, starting as new user.");
-            // Will use the default empty state initialized above
-        } else if (!res.ok) {
-            throw new Error(`Server error: ${res.status}`);
-        } else {
-            const data = await res.json();
+        try {
+            const res = await fetch(`${BACKEND_URL}/api/user/${state.memo}`);
             
-            // 3. APPLY MONGO DATA AS ABSOLUTE TRUTH
-            state.balance = data.depositBalance !== undefined ? data.depositBalance : 0;
-            state.miningBalance = data.miningBalance !== undefined ? data.miningBalance : 0;
-            
-            if (data.drones && data.drones.length > 0) {
-                state.drones = data.drones;
-                state.hasClaimedFreeDrone = state.drones.some(d => d.type === 'FREE');
+            if (res.status === 404) {
+                console.log("User not found in DB, using local/new state.");
+            } else if (!res.ok) {
+                console.warn(`Server status: ${res.status}. Continuing in offline mode.`);
             } else {
-                state.drones = [];
-                state.hasClaimedFreeDrone = false;
+                const data = await res.json();
+                
+                // 3. APPLY MONGO DATA AS ABSOLUTE TRUTH
+                state.balance = data.depositBalance !== undefined ? data.depositBalance : state.balance;
+                state.miningBalance = data.miningBalance !== undefined ? data.miningBalance : state.miningBalance;
+                
+                if (data.drones && data.drones.length > 0) {
+                    state.drones = data.drones;
+                    state.hasClaimedFreeDrone = state.drones.some(d => d.type === 'FREE');
+                }
+                
+                if (!state.referrals) state.referrals = {};
+                if (data.referrerTgId !== undefined) state.referrals.invitedBy = data.referrerTgId;
+                if (data.referralsLvl1Count !== undefined) state.referrals.level1Count = data.referralsLvl1Count;
+                if (data.referralsLvl2Count !== undefined) state.referrals.level2Count = data.referralsLvl2Count;
+                if (data.referralProfit !== undefined) state.referrals.totalProfit = data.referralProfit;
             }
-            
-            if (!state.referrals) state.referrals = {};
-            state.referrals.invitedBy = data.referrerTgId;
-            state.referrals.level1Count = data.referralsLvl1Count || 0;
-            state.referrals.level2Count = data.referralsLvl2Count || 0;
-            state.referrals.totalProfit = data.referralProfit || 0;
+        } catch (fetchErr) {
+            console.warn("Backend unavailable. Running in offline mode with local storage.");
         }
 
-        // 4. Offline mining calculation based on accurate server data
+        // 4. Offline mining calculation based on state
         const now = Date.now();
         const timeDiff = Math.min(now - state.lastUpdate, 24 * 60 * 60 * 1000);
         if (timeDiff > 0) {
@@ -377,10 +381,14 @@ async function loadState() {
         }
         
     } catch (e) {
-        console.error("Backend fetch error:", e);
+        console.error("Critical error in loadState:", e);
         clearTimeout(wakeUpInterval);
-        if(loadingText) loadingText.textContent = window.miniappI18n ? window.miniappI18n.t('app.loading_error') : "Ошибка соединения с сервером базы данных. Попробуйте перезагрузить.";
-        // Leave loading screen visible so user knows it failed
+        
+        const overlay = document.getElementById('loading-overlay');
+        if (overlay) {
+            overlay.classList.add('opacity-0');
+            setTimeout(() => overlay.remove(), 500);
+        }
     }
 }
 
