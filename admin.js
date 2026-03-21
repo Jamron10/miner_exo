@@ -2,7 +2,7 @@
 
 // ВАЖНО: Укажите здесь URL вашего запущенного сервера (например, Render.com)
 // Пока сервер не запущен, админка не сможет загрузить данные.
-const ADMIN_API_URL = 'http://localhost:3000/api/admin'; // ЗАМЕНИТЬ ПОСЛЕ ЗАПУСКА СЕРВЕРА!
+const ADMIN_API_URL = 'https://miner-exo.onrender.com/api/admin'; // ЗАМЕНИТЬ ПОСЛЕ ЗАПУСКА СЕРВЕРА!
 
 const ADMIN_DRONE_TYPES = {
     'FREE': { name: 'Бесплатный', color: 'text-gray-400' },
