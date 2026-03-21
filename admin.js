@@ -49,7 +49,7 @@ async function loadAdminData() {
         }));
         
         adminState.users = (data.users || []).map(u => ({
-            memo: u.tgId,
+            memo: String(u.tgId || ''),
             username: u.username ? `@${u.username}` : '',
             name: u.firstName || 'Игрок',
             balance: u.depositBalance || 0,
@@ -398,7 +398,7 @@ function renderAdminUsers(query = '') {
     const q = query.toLowerCase().trim();
     
     const filtered = adminState.users.filter(u => 
-        u.memo.toLowerCase().includes(q) || 
+        (u.memo && String(u.memo).toLowerCase().includes(q)) || 
         (u.username && u.username.toLowerCase().includes(q)) ||
         (u.name && u.name.toLowerCase().includes(q))
     );
