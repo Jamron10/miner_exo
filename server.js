@@ -10,6 +10,8 @@ const MONGO_URI = "mongodb+srv://jamron:Jamron5551111@cluster0.ucx8kac.mongodb.n
 const BOT_TOKEN = "8307131916:AAFPyhOUFH6znl9s6cqni6LL_A6Fzxodjp4"; 
 const WEB_APP_URL = "https://miner-exo.onrender.com"; // Например: https://t.me/ExoMinerBot/app
 
+
+
 // ==========================================
 // 1. ПОДКЛЮЧЕНИЕ К БАЗЕ ДАННЫХ MONGODB
 // ==========================================
@@ -119,6 +121,21 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
+// Корневой маршрут (чтобы убрать ошибку Cannot GET /)
+app.get('/', (req, res) => {
+    res.send(`
+        <html>
+            <head><title>ExoMiner Backend</title></head>
+            <body style="background: #111; color: #0f0; font-family: monospace; padding: 50px; text-align: center;">
+                <h1>🚀 ExoMiner Backend</h1>
+                <p>✅ API Server is running</p>
+                <p>🤖 Telegram Bot is polling...</p>
+                <p>📦 MongoDB is connected.</p>
+            </body>
+        </html>
+    `);
+});
+
 // --- ЭНДПОИНТЫ ДЛЯ ИГРЫ ---
 
 app.get('/api/user/:tgId', async (req, res) => {
@@ -133,10 +150,13 @@ app.get('/api/user/:tgId', async (req, res) => {
 
 app.post('/api/user/sync', async (req, res) => {
   try {
-    const { tgId, miningBalance, drones, username, firstName } = req.body;
+    const { tgId, miningBalance, depositBalance, drones, username, firstName } = req.body;
+    const updateData = { miningBalance, drones, username, firstName, lastSync: Date.now() };
+    if (depositBalance !== undefined) updateData.depositBalance = depositBalance;
+    
     const user = await User.findOneAndUpdate(
       { tgId },
-      { miningBalance, drones, username, firstName, lastSync: Date.now() },
+      updateData,
       { new: true }
     );
     res.json({ success: true, user });
@@ -173,6 +193,23 @@ app.post('/api/user/deposit_request', async (req, res) => {
         res.json({ success: true, tx });
     } catch (e) {
         res.status(500).json({ error: 'Ошибка пополнения' });
+    }
+});
+
+// Конвертация (Майнинг -> Депозит)
+app.post('/api/user/convert', async (req, res) => {
+    try {
+        const { tgId, amount } = req.body;
+        const user = await User.findOne({ tgId });
+        if (!user || user.miningBalance < amount) return res.status(400).json({ error: 'Недостаточно средств' });
+
+        user.miningBalance -= amount;
+        user.depositBalance += amount;
+        await user.save();
+
+        res.json({ success: true, user });
+    } catch (e) {
+        res.status(500).json({ error: 'Ошибка конвертации' });
     }
 });
 
