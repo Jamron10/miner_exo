@@ -40,7 +40,7 @@ const AppStorage = {
 
 // Constants & Configuration
 const ADMIN_LIST = ['5730406030', '7166133241']; // ID администраторов
-const BOT_USERNAME = 'TON_USDT_Miner_Bot'; // <-- ИЗМЕНИТЕ ЮЗЕРНЕЙМ ВАШЕГО БОТА ЗДЕСЬ (без @)
+const BOT_USERNAME = 'JamronCreatorTBot'; // <-- ИЗМЕНИТЕ ЮЗЕРНЕЙМ ВАШЕГО БОТА ЗДЕСЬ (без @)
 const DRONES = {
     FREE: { 
         id: 'FREE', nameKey: 'app.rarity_free', rateDay: 0.004, maxDays: null, maxMined: null,
