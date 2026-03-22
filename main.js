@@ -1,3 +1,43 @@
+// Global Error Handler for Debugging
+window.addEventListener('error', function(event) {
+    const msg = document.createElement('div');
+    msg.style.cssText = 'position:fixed;top:0;left:0;right:0;background:rgba(220,38,38,0.9);color:white;z-index:9999;padding:10px;font-size:10px;font-family:monospace;word-wrap:break-word;';
+    msg.textContent = 'Error: ' + event.message + ' at ' + event.filename + ':' + event.lineno;
+    if(document.body) document.body.appendChild(msg);
+});
+window.addEventListener('unhandledrejection', function(event) {
+    const msg = document.createElement('div');
+    msg.style.cssText = 'position:fixed;top:0;left:0;right:0;background:rgba(217,119,6,0.9);color:white;z-index:9999;padding:10px;font-size:10px;font-family:monospace;word-wrap:break-word;';
+    msg.textContent = 'Promise Error: ' + (event.reason && event.reason.stack ? event.reason.stack : event.reason);
+    if(document.body) document.body.appendChild(msg);
+});
+
+// Robust Storage Wrapper
+const AppStorage = {
+    async get(key) {
+        try {
+            if (typeof miniappsAI !== 'undefined' && miniappsAI.storage) {
+                return await miniappsAI.storage.getItem(key);
+            }
+            return localStorage.getItem(key);
+        } catch(e) {
+            console.warn("Storage get error:", e);
+            return null;
+        }
+    },
+    async set(key, val) {
+        try {
+            if (typeof miniappsAI !== 'undefined' && miniappsAI.storage) {
+                await miniappsAI.storage.setItem(key, val);
+            } else {
+                localStorage.setItem(key, val);
+            }
+        } catch(e) {
+            console.warn("Storage set error:", e);
+        }
+    }
+};
+
 // Constants & Configuration
 const DRONES = {
     FREE: { 
@@ -124,7 +164,7 @@ const PACKS = [
 ];
 
 // App State
-let state = {
+window.window.state = {
     balance: 0.0, // Deposit balance
     miningBalance: 0.0, // Withdrawable/Convertible balance
     unclaimed: 0.0,
@@ -162,8 +202,6 @@ const els = {
     shopList: document.getElementById('shop-list'),
     modalOverlay: document.getElementById('modal-overlay'),
     starfield: document.getElementById('starfield'),
-    btnLang: document.getElementById('btn-lang'),
-    langDropdown: document.getElementById('lang-dropdown'),
     // Wallet Elements
     walletDepositBalance: document.getElementById('wallet-deposit-balance'),
     walletWithdrawBalance: document.getElementById('wallet-withdraw-balance'),
@@ -177,7 +215,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         initTelegramUser();
         setupAudio();
         createStarfield();
-        setupLanguageSwitcher();
         await loadState();
         setupNavigation();
         setupWallet();
@@ -195,7 +232,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         if (els.btnClaim) els.btnClaim.addEventListener('click', claimTokens);
         
-        if (state.lastUpdate > Date.now()) state.lastUpdate = Date.now();
+        if (state.lastUpdate > Date.now()) window.state.lastUpdate = Date.now();
         
         lastFrameTime = Date.now();
         gameLoop();
@@ -285,24 +322,24 @@ async function loadState() {
     
     try {
         // 1. Get local persistent data
-        const raw = (typeof miniappsAI !== 'undefined' ? await miniappsAI.storage.getItem('exoMinerState') : localStorage.getItem('exoMinerState'));
+        const raw = await AppStorage.get('exoMinerState');
         if (raw) {
             const parsed = JSON.parse(raw);
-            if (!window.tgUserFound && parsed.memo) state.memo = parsed.memo;
-            state.balance = parsed.balance || 0;
-            state.miningBalance = parsed.miningBalance || 0;
-            state.unclaimed = parsed.unclaimed || 0;
-            state.drones = parsed.drones || [];
-            state.hasClaimedFreeDrone = parsed.hasClaimedFreeDrone || false;
-            state.lastUpdate = parsed.lastUpdate || Date.now();
-            state.lastAirdropTime = parsed.lastAirdropTime || 0;
-            state.history = parsed.history || { deposits: [], withdrawals: [], conversions: [] };
-            if (parsed.referrals) state.referrals = parsed.referrals;
+            if (!window.tgUserFound && parsed.memo) window.state.memo = parsed.memo;
+            window.state.balance = parsed.balance || 0;
+            window.state.miningBalance = parsed.miningBalance || 0;
+            window.state.unclaimed = parsed.unclaimed || 0;
+            window.state.drones = parsed.drones || [];
+            window.state.hasClaimedFreeDrone = parsed.hasClaimedFreeDrone || false;
+            window.state.lastUpdate = parsed.lastUpdate || Date.now();
+            window.state.lastAirdropTime = parsed.lastAirdropTime || 0;
+            window.state.history = parsed.history || { deposits: [], withdrawals: [], conversions: [] };
+            if (parsed.referrals) window.state.referrals = parsed.referrals;
         } else {
-            if(typeof miniappsAI !== 'undefined') { await miniappsAI.storage.setItem('exoMinerState', JSON.stringify(state)); } else { localStorage.setItem('exoMinerState', JSON.stringify(state)); };
+            await AppStorage.set('exoMinerState', JSON.stringify(window.state));
         }
 
-        if (els.depositMemo) els.depositMemo.textContent = state.memo;
+        if (els.depositMemo) els.depositMemo.textContent = window.state.memo;
 
         // 2. MONGO BACKEND FETCH (Optional, will fall back to local if failed)
         wakeUpInterval = setTimeout(() => {
@@ -313,26 +350,26 @@ async function loadState() {
             const res = await fetch(`${BACKEND_URL}/api/user/${state.memo}`);
             
             if (res.status === 404) {
-                console.log("User not found in DB, using local/new state.");
+                console.log("User not found in DB, using local/new window.state.");
             } else if (!res.ok) {
                 console.warn(`Server status: ${res.status}. Continuing in offline mode.`);
             } else {
                 const data = await res.json();
                 
                 // 3. APPLY MONGO DATA AS ABSOLUTE TRUTH
-                state.balance = data.depositBalance !== undefined ? data.depositBalance : state.balance;
-                state.miningBalance = data.miningBalance !== undefined ? data.miningBalance : state.miningBalance;
+                window.state.balance = data.depositBalance !== undefined ? data.depositBalance : window.state.balance;
+                window.state.miningBalance = data.miningBalance !== undefined ? data.miningBalance : window.state.miningBalance;
                 
                 if (data.drones && data.drones.length > 0) {
-                    state.drones = data.drones;
-                    state.hasClaimedFreeDrone = state.drones.some(d => d.type === 'FREE');
+                    window.state.drones = data.drones;
+                    window.state.hasClaimedFreeDrone = window.state.drones.some(d => d.type === 'FREE');
                 }
                 
-                if (!state.referrals) state.referrals = {};
-                if (data.referrerTgId !== undefined) state.referrals.invitedBy = data.referrerTgId;
-                if (data.referralsLvl1Count !== undefined) state.referrals.level1Count = data.referralsLvl1Count;
-                if (data.referralsLvl2Count !== undefined) state.referrals.level2Count = data.referralsLvl2Count;
-                if (data.referralProfit !== undefined) state.referrals.totalProfit = data.referralProfit;
+                if (!state.referrals) window.state.referrals = {};
+                if (data.referrerTgId !== undefined) window.state.referrals.invitedBy = data.referrerTgId;
+                if (data.referralsLvl1Count !== undefined) window.state.referrals.level1Count = data.referralsLvl1Count;
+                if (data.referralsLvl2Count !== undefined) window.state.referrals.level2Count = data.referralsLvl2Count;
+                if (data.referralProfit !== undefined) window.state.referrals.totalProfit = data.referralProfit;
             }
         } catch (fetchErr) {
             console.warn("Backend unavailable. Running in offline mode with local storage.");
@@ -340,11 +377,11 @@ async function loadState() {
 
         // 4. Offline mining calculation based on state
         const now = Date.now();
-        const timeDiff = Math.min(now - state.lastUpdate, 24 * 60 * 60 * 1000);
+        const timeDiff = Math.min(now - window.state.lastUpdate, 24 * 60 * 60 * 1000);
         if (timeDiff > 0) {
             const dt = timeDiff / 1000;
             let activeRateSec = 0;
-            state.drones.forEach(d => {
+            window.state.drones.forEach(d => {
                 const stats = DRONES[d.type];
                 if (!stats) return;
                 let isActive = true;
@@ -358,9 +395,9 @@ async function loadState() {
                     activeRateSec += stats.rate;
                 }
             });
-            state.unclaimed += dt * activeRateSec;
+            window.state.unclaimed += dt * activeRateSec;
         }
-        state.lastUpdate = now;
+        window.state.lastUpdate = now;
         
         clearTimeout(wakeUpInterval);
         
@@ -415,11 +452,11 @@ async function syncStateWithBackend(currentState) {
     }
 }
 
-async function saveState() {
+window.saveState = async function saveState() {
     if (!isInitialized) return;
     try {
-        if(typeof miniappsAI !== 'undefined') { await miniappsAI.storage.setItem('exoMinerState', JSON.stringify(state)); } else { localStorage.setItem('exoMinerState', JSON.stringify(state)); };
-        syncStateWithBackend(state);
+        await AppStorage.set('exoMinerState', JSON.stringify(window.state));
+        syncStateWithBackend(window.state);
     } catch (e) {
         console.error("Failed to save state", e);
     }
@@ -456,8 +493,8 @@ function initTelegramUser() {
             usernameEl.textContent = '@' + (user.username || user.id);
         }
         if (user.id) {
-            state.memo = user.id.toString();
-            if (els.depositMemo) els.depositMemo.textContent = state.memo;
+            window.state.memo = user.id.toString();
+            if (els.depositMemo) els.depositMemo.textContent = window.state.memo;
         }
     }
 }
@@ -484,7 +521,7 @@ class SpaceAmbientEngine {
     start() {
         if (this.isPlaying) return;
         this.init();
-        if (this.ctx.state === 'suspended') this.ctx.resume();
+        if (this.ctx.window.state === 'suspended') this.ctx.resume();
         this.isPlaying = true;
         
         this.ambientGain = this.ctx.createGain();
@@ -669,12 +706,12 @@ function setupAudio() {
         
         volumeSlider.addEventListener('change', (e) => {
             const val = parseInt(e.target.value);
-            try { if(typeof miniappsAI !== 'undefined') { miniappsAI.storage.setItem('exoMinerVolume', (val / 100).toString()); } else { localStorage.setItem('exoMinerVolume', (val / 100).toString()); } } catch(err){}
+            AppStorage.set('exoMinerVolume', (val / 100).toString());
         });
     }
     
     try {
-        (typeof miniappsAI !== 'undefined' ? miniappsAI.storage.getItem('exoMinerVolume') : Promise.resolve(localStorage.getItem('exoMinerVolume'))).then(val => {
+        AppStorage.get('exoMinerVolume').then(val => {
             if (val !== null && volumeSlider) {
                 const vol = parseFloat(val);
                 volumeSlider.value = vol * 100;
@@ -704,7 +741,7 @@ function setupAudio() {
 function getTotalMiningRate() {
     let ratePerDay = 0;
     const now = Date.now();
-    state.drones.forEach(d => {
+    window.state.drones.forEach(d => {
         const stats = DRONES[d.type];
         if (!stats) return;
         
@@ -732,7 +769,7 @@ function gameLoop() {
     
     if (dt > 0 && dt < 1) { // Prevent huge jumps
         let activeRateSec = 0;
-        state.drones.forEach(d => {
+        window.state.drones.forEach(d => {
             const stats = DRONES[d.type];
             if (!stats) return;
             
@@ -752,12 +789,12 @@ function gameLoop() {
             }
         });
 
-        state.unclaimed += activeRateSec * dt;
-        state.lastUpdate = now;
+        window.state.unclaimed += activeRateSec * dt;
+        window.state.lastUpdate = now;
         
-        if (els.miningCounter) els.miningCounter.textContent = state.unclaimed.toFixed(6);
+        if (els.miningCounter) els.miningCounter.textContent = window.state.unclaimed.toFixed(6);
     } else if (dt >= 1) {
-        state.lastUpdate = now;
+        window.state.lastUpdate = now;
     }
     
     if (window.THREE && scene && camera && renderer) {
@@ -787,15 +824,15 @@ function claimTokens() {
         setTimeout(() => els.btnClaim.classList.remove('scale-95', 'opacity-80'), 150);
     }
     
-    state.miningBalance += state.unclaimed;
-    state.unclaimed = 0;
+    window.state.miningBalance += window.state.unclaimed;
+    window.state.unclaimed = 0;
     updateBalancesUI();
     saveState();
 }
 
-function updateBalancesUI() {
-    const depFormatted = state.balance.toFixed(4);
-    const minFormatted = state.miningBalance.toFixed(4);
+window.updateBalancesUI = function updateBalancesUI() {
+    const depFormatted = window.state.balance.toFixed(4);
+    const minFormatted = window.state.miningBalance.toFixed(4);
     
     if(els.headerBalance) els.headerBalance.textContent = depFormatted;
     if(els.headerMining) els.headerMining.textContent = minFormatted;
@@ -819,7 +856,7 @@ function initAirdrop() {
     
     btnAirdrop.addEventListener('click', () => {
         const now = Date.now();
-        const lastTime = state.lastAirdropTime || 0;
+        const lastTime = window.state.lastAirdropTime || 0;
         if (now - lastTime < 3600000) {
             showToast('Airdrop пока недоступен');
             return;
@@ -846,8 +883,8 @@ function initAirdrop() {
                         adModal.classList.remove('flex');
                     }, 300);
                     
-                    state.lastAirdropTime = Date.now();
-                    state.miningBalance += 0.001;
+                    window.state.lastAirdropTime = Date.now();
+                    window.state.miningBalance += 0.001;
                     saveState();
                     updateBalancesUI();
                     updateAirdropUI();
@@ -867,7 +904,7 @@ function updateAirdropUI() {
 
     const checkTime = () => {
         const now = Date.now();
-        const lastTime = state.lastAirdropTime || 0;
+        const lastTime = window.state.lastAirdropTime || 0;
         const diff = 3600000 - (now - lastTime);
         
         if (diff <= 0) {
@@ -896,7 +933,7 @@ function renderWalletHistory() {
         const container = document.getElementById(`history-${type}`);
         if(!container) return;
         
-        const items = state.history[type] || [];
+        const items = window.state.history[type] || [];
         if(items.length === 0) {
             container.innerHTML = `<div class="text-center text-sm text-gray-600 py-4">${window.miniappI18n ? window.miniappI18n.t('app.history_empty') : 'История пуста'}</div>`;
             return;
@@ -975,8 +1012,8 @@ function setupWallet() {
             clickCount++;
             clearTimeout(clickTimer);
             if (clickCount >= 3) {
-                state.balance += 10;
-                state.history.deposits.push({ date: Date.now(), amount: 10, status: 'success' });
+                window.state.balance += 10;
+                window.state.history.deposits.push({ date: Date.now(), amount: 10, status: 'success' });
                 saveState();
                 updateBalancesUI();
                 renderWalletHistory();
@@ -990,7 +1027,7 @@ function setupWallet() {
 
     // Memo setup
     if(els.depositMemo) {
-        els.depositMemo.textContent = state.memo;
+        els.depositMemo.textContent = window.state.memo;
     }
 
     // Deposit Submit
@@ -1012,10 +1049,10 @@ function setupWallet() {
                 const res = await fetch(`${BACKEND_URL}/api/user/deposit_request`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ tgId: state.memo, amount, memo: state.memo })
+                    body: JSON.stringify({ tgId: window.state.memo, amount, memo: window.state.memo })
                 });
                 if (res.ok) {
-                    state.history.deposits.push({ id: depositId, date: Date.now(), amount, status: 'pending' });
+                    window.state.history.deposits.push({ id: depositId, date: Date.now(), amount, status: 'pending' });
                     input.value = '';
                     saveState();
                     renderWalletHistory();
@@ -1034,7 +1071,7 @@ function setupWallet() {
     const btnWithdrawMax = document.getElementById('btn-withdraw-max');
     if(btnWithdrawMax) {
         btnWithdrawMax.addEventListener('click', () => {
-            document.getElementById('withdraw-amount').value = state.miningBalance.toFixed(4);
+            document.getElementById('withdraw-amount').value = window.state.miningBalance.toFixed(4);
         });
     }
 
@@ -1051,7 +1088,7 @@ function setupWallet() {
 
             const input = document.getElementById('withdraw-amount');
             const amount = parseFloat(input.value);
-            if (isNaN(amount) || amount <= 0 || amount > state.miningBalance) {
+            if (isNaN(amount) || amount <= 0 || amount > window.state.miningBalance) {
                 showToast(window.miniappI18n ? window.miniappI18n.t('app.invalid_amount') : 'Некорректная сумма');
                 return;
             }
@@ -1062,12 +1099,12 @@ function setupWallet() {
                 const res = await fetch(`${BACKEND_URL}/api/user/withdraw`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ tgId: state.memo, amount, address })
+                    body: JSON.stringify({ tgId: window.state.memo, amount, address })
                 });
                 
                 if (res.ok) {
-                    state.miningBalance -= amount;
-                    state.history.withdrawals.push({ date: Date.now(), amount, address, status: 'pending' });
+                    window.state.miningBalance -= amount;
+                    window.state.history.withdrawals.push({ date: Date.now(), amount, address, status: 'pending' });
                     input.value = '';
                     if (addressInput) addressInput.value = '';
                     saveState();
@@ -1089,7 +1126,7 @@ function setupWallet() {
     const btnConvertAll = document.getElementById('btn-convert-all');
     if(btnConvertAll) {
         btnConvertAll.addEventListener('click', () => {
-            document.getElementById('convert-amount').value = state.miningBalance.toFixed(4);
+            document.getElementById('convert-amount').value = window.state.miningBalance.toFixed(4);
         });
     }
 
@@ -1099,7 +1136,7 @@ function setupWallet() {
         btnConvertSubmit.addEventListener('click', async () => {
             const input = document.getElementById('convert-amount');
             const amount = parseFloat(input.value);
-            if (isNaN(amount) || amount <= 0 || amount > state.miningBalance) {
+            if (isNaN(amount) || amount <= 0 || amount > window.state.miningBalance) {
                 showToast('Некорректная сумма');
                 return;
             }
@@ -1110,13 +1147,13 @@ function setupWallet() {
                 const res = await fetch(`${BACKEND_URL}/api/user/convert`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ tgId: state.memo, amount })
+                    body: JSON.stringify({ tgId: window.state.memo, amount })
                 });
                 
                 if (res.ok) {
-                    state.miningBalance -= amount;
-                    state.balance += amount; 
-                    state.history.conversions.push({ date: Date.now(), amount, status: 'success' });
+                    window.state.miningBalance -= amount;
+                    window.state.balance += amount; 
+                    window.state.history.conversions.push({ date: Date.now(), amount, status: 'success' });
                     input.value = '';
                     saveState();
                     updateBalancesUI();
@@ -1141,8 +1178,8 @@ function renderReferrals() {
     const lvl2 = document.getElementById('ref-lvl2-count');
     const profit = document.getElementById('ref-total-profit');
     
-    if (lvl1) lvl1.textContent = state.referrals.level1Count || 0;
-    if (lvl2) lvl2.textContent = state.referrals.level2Count || 0;
+    if (lvl1) lvl1.textContent = window.state.referrals.level1Count || 0;
+    if (lvl2) lvl2.textContent = window.state.referrals.level2Count || 0;
     if (profit) profit.innerHTML = `${(state.referrals.totalProfit || 0).toFixed(4)} <span class="text-sm font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-lg border border-emerald-500/20 shadow-inner"><div class="relative w-6 h-6 inline-block align-middle ml-1 shrink-0"><div class="w-full h-full rounded-full bg-emerald-900/40 flex items-center justify-center border border-emerald-500/40 shadow-[0_0_5px_rgba(16,185,129,0.3)]"><svg class="w-3.5 h-3.5" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M20 40C31.0457 40 40 31.0457 40 20C40 8.9543 31.0457 0 20 0C8.9543 0 0 8.9543 0 20C0 31.0457 8.9543 40 20 40Z" fill="#26A17B"/><path d="M22.9248 18.0673H28.4348V13.8223H11.5648V18.0673H17.0748V31.6443H22.9248V18.0673Z" fill="white"/><path d="M20 23.3773C25.4638 23.3773 29.8938 22.0673 29.8938 20.4523C29.8938 18.8373 25.4638 17.5273 20 17.5273C14.5362 17.5273 10.1062 18.8373 10.1062 20.4523C10.1062 22.0673 14.5362 23.3773 20 23.3773Z" stroke="white" stroke-width="2"/></svg></div><div class="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-gray-900 border-[1px] border-gray-800 flex items-center justify-center z-20 shadow-[0_0_3px_rgba(0,152,234,0.5)]"><svg class="w-full h-full" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M14 28C21.732 28 28 21.732 28 14C28 6.26801 21.732 0 14 0C6.26801 0 0 6.26801 0 14C0 21.732 6.26801 28 14 28Z" fill="#0098EA"/><path d="M18.8453 8.4H9.15461C8.30396 8.4 7.77884 9.37128 8.22055 10.096L13.0659 18.0494C13.4359 18.6568 14.5641 18.6568 14.9341 18.0494L19.7794 10.096C20.2211 9.37128 19.696 8.4 18.8453 8.4Z" fill="white"/><path d="M14 16.5161L9.62341 9.42944H18.3766L14 16.5161Z" fill="#0098EA"/></svg></div></div></span>`;
 }
 
@@ -1202,47 +1239,6 @@ function setupReferrals() {
     });
 }
 
-// Language
-function setupLanguageSwitcher() {
-    if (!window.miniappI18n || !els.btnLang) return;
-    
-    (async () => {
-        try {
-            const storedLang = (typeof miniappsAI !== 'undefined' ? await miniappsAI.storage.getItem('exoMinerLang') : localStorage.getItem('exoMinerLang'));
-            const targetLang = storedLang || 'ru';
-            await window.miniappI18n.setLocale(targetLang);
-            els.btnLang.textContent = targetLang.toUpperCase();
-        } catch(e) {}
-    })();
-
-    els.btnLang.addEventListener('click', (e) => {
-        e.stopPropagation();
-        els.langDropdown.classList.toggle('hidden');
-        els.langDropdown.classList.toggle('flex');
-    });
-
-    document.addEventListener('click', () => {
-        els.langDropdown.classList.add('hidden');
-        els.langDropdown.classList.remove('flex');
-    });
-
-    els.langDropdown.querySelectorAll('.lang-option').forEach(btn => {
-        btn.addEventListener('click', async (e) => {
-            const lang = e.currentTarget.getAttribute('data-lang');
-            try {
-                await window.miniappI18n.setLocale(lang);
-                els.btnLang.textContent = lang.toUpperCase();
-                if(typeof miniappsAI !== 'undefined') { await miniappsAI.storage.setItem('exoMinerLang', lang); } else { localStorage.setItem('exoMinerLang', lang); };
-                renderHangar();
-                renderShop();
-                renderWalletHistory();
-            } catch(err) {
-                console.error("Failed to change locale", err);
-            }
-        });
-    });
-}
-
 // Navigation
 function setupNavigation() {
     els.navItems.forEach(item => {
@@ -1260,7 +1256,7 @@ function setupNavigation() {
 }
 
 // Hangar View
-function renderHangar() {
+window.renderHangar = function renderHangar() {
     const freeCaseContainer = document.getElementById('free-case-container');
     if (freeCaseContainer) {
         if (!state.hasClaimedFreeDrone) {
@@ -1310,7 +1306,7 @@ function renderHangar() {
             
             const def = DRONES[f];
             let name = window.miniappI18n ? window.miniappI18n.t(def.nameKey) : f;
-            const count = state.drones.filter(d => d.type === f).length;
+            const count = window.state.drones.filter(d => d.type === f).length;
             
             let baseClass = 'px-4 py-2 rounded-2xl text-[11px] font-black uppercase tracking-wider whitespace-nowrap transition-all duration-300 border relative overflow-hidden group shrink-0 ';
             if (isSelected) {
@@ -1335,9 +1331,9 @@ function renderHangar() {
 
     if (!els.hangarList) return;
     els.hangarList.innerHTML = '';
-    if (els.hangarCount) els.hangarCount.textContent = state.drones.length;
+    if (els.hangarCount) els.hangarCount.textContent = window.state.drones.length;
     
-    const filteredDrones = state.drones.filter(d => d.type === currentHangarFilter);
+    const filteredDrones = window.state.drones.filter(d => d.type === currentHangarFilter);
 
     if (filteredDrones.length === 0) {
         if (els.hangarEmpty) {
@@ -1474,9 +1470,9 @@ function updateNavIndicators() {
 }
 
 function claimFreeDrone() {
-    state.hasClaimedFreeDrone = true;
+    window.state.hasClaimedFreeDrone = true;
     const newDrone = { id: generateId(), type: 'FREE', acquiredAt: Date.now(), minedAmount: 0 };
-    state.drones.push(newDrone);
+    window.state.drones.push(newDrone);
     
     saveState();
     updateRatesDisplay();
@@ -1599,7 +1595,7 @@ function buyPack(packId) {
         return;
     }
     
-    state.balance -= pack.price;
+    window.state.balance -= pack.price;
     updateBalancesUI();
     
     const roll = Math.random() * 100;
@@ -1615,7 +1611,7 @@ function buyPack(packId) {
     }
     
     const newDrone = { id: generateId(), type: wonType, acquiredAt: Date.now(), minedAmount: 0 };
-    state.drones.push(newDrone);
+    window.state.drones.push(newDrone);
     
     saveState();
     updateRatesDisplay();
@@ -1898,7 +1894,7 @@ function renderOrbits() {
     const now = Date.now();
     
     // Only show active drones in orbit
-    const activeDrones = state.drones.filter(d => {
+    const activeDrones = window.state.drones.filter(d => {
         const stats = DRONES[d.type];
         if (!stats) return false;
         if (stats.maxDays && (now - d.acquiredAt) / 86400000 >= stats.maxDays) return false;
