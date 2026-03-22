@@ -1,5 +1,6 @@
 // Global Error Handler for Debugging
 window.addEventListener('error', function(event) {
+    if(event.message && event.message.includes('ResizeObserver')) return;
     const msg = document.createElement('div');
     msg.style.cssText = 'position:fixed;top:0;left:0;right:0;background:rgba(220,38,38,0.9);color:white;z-index:9999;padding:10px;font-size:10px;font-family:monospace;word-wrap:break-word;';
     msg.textContent = 'Error: ' + event.message + ' at ' + event.filename + ':' + event.lineno;
@@ -340,7 +341,19 @@ async function loadState() {
     
     try {
         // 1. Get local persistent data
-        const raw = await AppStorage.get('exoMinerState');
+        const storageKey = 'exoMinerState_' + window.state.memo;
+        let raw = await AppStorage.get(storageKey);
+        
+        if (!raw) {
+            const oldRaw = await AppStorage.get('exoMinerState');
+            if (oldRaw) {
+                const oldParsed = JSON.parse(oldRaw);
+                if (String(oldParsed.memo) === String(window.state.memo)) {
+                    raw = oldRaw;
+                }
+            }
+        }
+
         if (raw) {
             const parsed = JSON.parse(raw);
             if (!window.tgUserFound && parsed.memo) window.state.memo = parsed.memo;
@@ -352,9 +365,15 @@ async function loadState() {
             window.state.lastUpdate = parsed.lastUpdate || Date.now();
             window.state.lastAirdropTime = parsed.lastAirdropTime || 0;
             window.state.history = parsed.history || { deposits: [], withdrawals: [], conversions: [] };
-            if (parsed.referrals) window.state.referrals = parsed.referrals;
+            if (parsed.referrals) {
+                const existingInvitedBy = window.state.referrals?.invitedBy;
+                window.state.referrals = parsed.referrals;
+                if (existingInvitedBy && !window.state.referrals.invitedBy) {
+                    window.state.referrals.invitedBy = existingInvitedBy;
+                }
+            }
         } else {
-            await AppStorage.set('exoMinerState', JSON.stringify(window.state));
+            await AppStorage.set(storageKey, JSON.stringify(window.state));
         }
 
         if (els.depositMemo) els.depositMemo.textContent = window.state.memo;
@@ -524,7 +543,8 @@ async function syncStateWithBackend(currentState) {
                 depositBalance: currentState.balance,
                 drones: currentState.drones,
                 username: document.getElementById('tg-username')?.textContent?.replace('@', '') || '',
-                firstName: document.getElementById('tg-name')?.textContent || 'Guest'
+                firstName: document.getElementById('tg-name')?.textContent || 'Guest',
+                referrerTgId: currentState.referrals?.invitedBy || null
             })
         });
     } catch(e) {
@@ -535,7 +555,8 @@ async function syncStateWithBackend(currentState) {
 window.saveState = async function saveState() {
     if (!isInitialized) return;
     try {
-        await AppStorage.set('exoMinerState', JSON.stringify(window.state));
+        const storageKey = 'exoMinerState_' + window.state.memo;
+        await AppStorage.set(storageKey, JSON.stringify(window.state));
         syncStateWithBackend(window.state);
     } catch (e) {
         console.error("Failed to save state", e);
@@ -545,16 +566,20 @@ window.saveState = async function saveState() {
 // Telegram User Init
 function initTelegramUser() {
     let user = null;
+    let startParam = null;
     
     if (window.Telegram?.WebApp?.initDataUnsafe?.user) {
         user = window.Telegram.WebApp.initDataUnsafe.user;
+        startParam = window.Telegram.WebApp.initDataUnsafe.start_param;
     } else {
         try {
             let tgWebAppData = new URLSearchParams(window.location.hash.slice(1)).get('tgWebAppData') || 
                                new URLSearchParams(window.location.search).get('tgWebAppData');
             if (tgWebAppData) {
-                const userStr = new URLSearchParams(tgWebAppData).get('user');
+                const urlParams = new URLSearchParams(tgWebAppData);
+                const userStr = urlParams.get('user');
                 if (userStr) user = JSON.parse(userStr);
+                startParam = urlParams.get('start_param');
             }
         } catch (e) {
             console.error('Failed to parse TG data', e);
@@ -576,6 +601,11 @@ function initTelegramUser() {
             window.state.memo = user.id.toString();
             if (els.depositMemo) els.depositMemo.textContent = window.state.memo;
         }
+    }
+
+    if (startParam && String(startParam) !== String(window.state.memo)) {
+        if (!window.state.referrals) window.state.referrals = {};
+        window.state.referrals.invitedBy = String(startParam);
     }
 }
 
