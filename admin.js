@@ -46,6 +46,8 @@ async function loadAdminData() {
             date: w.date
         }));
         
+        if (data.settings) adminState.settings = data.settings;
+        
         adminState.users = (data.users || []).map(u => ({
             memo: String(u.tgId || ''),
             username: u.username ? `@${u.username}` : '',
@@ -79,6 +81,55 @@ async function loadAdminData() {
     renderAdminDashboard();
     renderAdminRequests();
     renderAdminUsers();
+    
+    // Загрузка настроек
+    try {
+        const setRes = await fetch('https://miner-exo.onrender.com/api/settings');
+        if (setRes.ok) {
+            adminState.settings = await setRes.json();
+            renderAdminSettings();
+        }
+    } catch (e) { console.error('Settings fetch error', e); }
+}
+
+function renderAdminSettings() {
+    if (!adminState.settings) return;
+    const s = adminState.settings;
+    
+    // Toggles
+    const updateToggle = (id, isOn) => {
+        const btn = document.getElementById(id);
+        if (!btn) return;
+        const circle = btn.querySelector('span');
+        if (isOn) {
+            btn.classList.remove('bg-gray-700');
+            btn.classList.add('bg-emerald-600');
+            circle.classList.add('translate-x-5');
+        } else {
+            btn.classList.add('bg-gray-700');
+            btn.classList.remove('bg-emerald-600');
+            circle.classList.remove('translate-x-5');
+        }
+        btn.dataset.on = isOn ? 'true' : 'false';
+    };
+    
+    updateToggle('admin-toggle-maintenance', s.isMaintenance);
+    updateToggle('admin-toggle-deposits', s.depositsEnabled);
+    updateToggle('admin-toggle-withdraws', s.withdrawsEnabled);
+    
+    // Refs
+    const ref1 = document.getElementById('admin-ref-lvl1');
+    const ref2 = document.getElementById('admin-ref-lvl2');
+    if (ref1) ref1.value = s.refLvl1;
+    if (ref2) ref2.value = s.refLvl2;
+    
+    // Rates
+    if (s.rates) {
+        Object.keys(s.rates).forEach(k => {
+            const input = document.getElementById(`admin-rate-${k}`);
+            if (input) input.value = s.rates[k];
+        });
+    }
 }
 
 // 2. Инициализация UI
@@ -123,6 +174,27 @@ function initAdminPanel() {
     if (searchInput) {
         searchInput.addEventListener('input', (e) => renderAdminUsers(e.target.value));
     }
+
+    ['admin-toggle-maintenance', 'admin-toggle-deposits', 'admin-toggle-withdraws'].forEach(id => {
+        const btn = document.getElementById(id);
+        if (btn) {
+            btn.addEventListener('click', () => {
+                const isOn = btn.dataset.on === 'true';
+                const circle = btn.querySelector('span');
+                if (isOn) {
+                    btn.classList.add('bg-gray-700');
+                    btn.classList.remove('bg-emerald-600');
+                    circle.classList.remove('translate-x-5');
+                    btn.dataset.on = 'false';
+                } else {
+                    btn.classList.remove('bg-gray-700');
+                    btn.classList.add('bg-emerald-600');
+                    circle.classList.add('translate-x-5');
+                    btn.dataset.on = 'true';
+                }
+            });
+        }
+    });
 
     tabs.forEach(tab => {
         tab.addEventListener('click', (e) => {
@@ -170,27 +242,43 @@ function initAdminPanel() {
             if (action) {
                 const id = btn.getAttribute('data-id');
 
-                if (action === 'save-settings') {
+                if (action === 'save-settings' || action === 'save-rates') {
                     btn.disabled = true;
                     const prevText = btn.innerText;
                     btn.innerText = 'Сохранение...';
-                    setTimeout(() => {
-                        if(typeof showToast === 'function') showToast('Настройки успешно сохранены');
+                    
+                    const isMaintenance = document.getElementById('admin-toggle-maintenance')?.dataset?.on === 'true';
+                    const depositsEnabled = document.getElementById('admin-toggle-deposits')?.dataset?.on === 'true';
+                    const withdrawsEnabled = document.getElementById('admin-toggle-withdraws')?.dataset?.on === 'true';
+                    
+                    const refLvl1 = parseFloat(document.getElementById('admin-ref-lvl1')?.value) || 7;
+                    const refLvl2 = parseFloat(document.getElementById('admin-ref-lvl2')?.value) || 5;
+                    
+                    const rates = {
+                        FREE: parseFloat(document.getElementById('admin-rate-FREE')?.value) || 0.004,
+                        COMMON: parseFloat(document.getElementById('admin-rate-COMMON')?.value) || 0.05,
+                        UNCOMMON: parseFloat(document.getElementById('admin-rate-UNCOMMON')?.value) || 0.057,
+                        RARE: parseFloat(document.getElementById('admin-rate-RARE')?.value) || 0.068,
+                        EPIC: parseFloat(document.getElementById('admin-rate-EPIC')?.value) || 0.082,
+                        LEGENDARY: parseFloat(document.getElementById('admin-rate-LEGENDARY')?.value) || 0.100
+                    };
+                    
+                    fetch('https://miner-exo.onrender.com/api/admin/settings', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ isMaintenance, depositsEnabled, withdrawsEnabled, refLvl1, refLvl2, rates })
+                    }).then(res => {
+                        if(res.ok) {
+                            if(typeof showToast === 'function') showToast(action === 'save-rates' ? 'Доходность успешно обновлена' : 'Настройки успешно сохранены');
+                        } else {
+                            if(typeof showToast === 'function') showToast('Ошибка при сохранении');
+                        }
+                    }).catch(() => {
+                        if(typeof showToast === 'function') showToast('Оффлайн: сымитировано сохранение настроек');
+                    }).finally(() => {
                         btn.innerText = prevText;
                         btn.disabled = false;
-                    }, 500);
-                    return;
-                }
-
-                if (action === 'save-rates') {
-                    btn.disabled = true;
-                    const prevText = btn.innerText;
-                    btn.innerText = 'Сохранение...';
-                    setTimeout(() => {
-                        if(typeof showToast === 'function') showToast('Доходность успешно обновлена');
-                        btn.innerText = prevText;
-                        btn.disabled = false;
-                    }, 500);
+                    });
                     return;
                 }
 
