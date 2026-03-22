@@ -9,7 +9,7 @@ const TelegramBot = require('node-telegram-bot-api');
 // ⚙️ НАСТРОЙКИ (Замените на свои данные)
 // ==========================================
 const MONGO_URI = "mongodb+srv://jamron:WV5nO1UIvofK01Nl@cluster0.ucx8kac.mongodb.net/?appName=Cluster0";
-const BOT_TOKEN = "8307131916:AAGS2dX8o-SZ3t53iS-8O4bPmEmVAd_jjng"; 
+const BOT_TOKEN = "8307131916:AAFEULs0aRsCCu7iGwBd_w49uuLwg3WUwLU"; 
 const WEB_APP_URL = "https://miner-exo.onrender.com"; // Например: https://t.me/ExoMinerBot/app
 
 
