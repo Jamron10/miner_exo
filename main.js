@@ -285,7 +285,7 @@ async function loadState() {
     
     try {
         // 1. Get local persistent data
-        const raw = await miniappsAI.storage.getItem('exoMinerState');
+        const raw = (typeof miniappsAI !== 'undefined' ? await miniappsAI.storage.getItem('exoMinerState') : localStorage.getItem('exoMinerState'));
         if (raw) {
             const parsed = JSON.parse(raw);
             if (!window.tgUserFound && parsed.memo) state.memo = parsed.memo;
@@ -299,7 +299,7 @@ async function loadState() {
             state.history = parsed.history || { deposits: [], withdrawals: [], conversions: [] };
             if (parsed.referrals) state.referrals = parsed.referrals;
         } else {
-            await miniappsAI.storage.setItem('exoMinerState', JSON.stringify(state));
+            if(typeof miniappsAI !== 'undefined') { await miniappsAI.storage.setItem('exoMinerState', JSON.stringify(state)); } else { localStorage.setItem('exoMinerState', JSON.stringify(state)); };
         }
 
         if (els.depositMemo) els.depositMemo.textContent = state.memo;
@@ -418,7 +418,7 @@ async function syncStateWithBackend(currentState) {
 async function saveState() {
     if (!isInitialized) return;
     try {
-        await miniappsAI.storage.setItem('exoMinerState', JSON.stringify(state));
+        if(typeof miniappsAI !== 'undefined') { await miniappsAI.storage.setItem('exoMinerState', JSON.stringify(state)); } else { localStorage.setItem('exoMinerState', JSON.stringify(state)); };
         syncStateWithBackend(state);
     } catch (e) {
         console.error("Failed to save state", e);
@@ -669,12 +669,12 @@ function setupAudio() {
         
         volumeSlider.addEventListener('change', (e) => {
             const val = parseInt(e.target.value);
-            try { miniappsAI.storage.setItem('exoMinerVolume', (val / 100).toString()); } catch(err){}
+            try { if(typeof miniappsAI !== 'undefined') { miniappsAI.storage.setItem('exoMinerVolume', (val / 100).toString()); } else { localStorage.setItem('exoMinerVolume', (val / 100).toString()); } } catch(err){}
         });
     }
     
     try {
-        miniappsAI.storage.getItem('exoMinerVolume').then(val => {
+        (typeof miniappsAI !== 'undefined' ? miniappsAI.storage.getItem('exoMinerVolume') : Promise.resolve(localStorage.getItem('exoMinerVolume'))).then(val => {
             if (val !== null && volumeSlider) {
                 const vol = parseFloat(val);
                 volumeSlider.value = vol * 100;
@@ -1208,7 +1208,7 @@ function setupLanguageSwitcher() {
     
     (async () => {
         try {
-            const storedLang = await miniappsAI.storage.getItem('exoMinerLang');
+            const storedLang = (typeof miniappsAI !== 'undefined' ? await miniappsAI.storage.getItem('exoMinerLang') : localStorage.getItem('exoMinerLang'));
             const targetLang = storedLang || 'ru';
             await window.miniappI18n.setLocale(targetLang);
             els.btnLang.textContent = targetLang.toUpperCase();
@@ -1232,7 +1232,7 @@ function setupLanguageSwitcher() {
             try {
                 await window.miniappI18n.setLocale(lang);
                 els.btnLang.textContent = lang.toUpperCase();
-                await miniappsAI.storage.setItem('exoMinerLang', lang);
+                if(typeof miniappsAI !== 'undefined') { await miniappsAI.storage.setItem('exoMinerLang', lang); } else { localStorage.setItem('exoMinerLang', lang); };
                 renderHangar();
                 renderShop();
                 renderWalletHistory();
