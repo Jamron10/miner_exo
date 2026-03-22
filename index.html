@@ -598,15 +598,15 @@
                         <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 space-y-4 shadow-inner">
                             <div class="flex justify-between items-center border-b border-gray-800 pb-3">
                                 <span class="text-sm text-gray-300 font-bold">Технические работы</span>
-                                <button class="w-11 h-6 bg-gray-700 rounded-full relative transition-colors duration-300 focus:outline-none"><span class="absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform duration-300"></span></button>
+                                <button id="admin-toggle-maintenance" class="w-11 h-6 bg-gray-700 rounded-full relative transition-colors duration-300 focus:outline-none"><span class="absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform duration-300"></span></button>
                             </div>
                             <div class="flex justify-between items-center border-b border-gray-800 pb-3">
                                 <span class="text-sm text-gray-300 font-bold">Прием депозитов</span>
-                                <button class="w-11 h-6 bg-emerald-600 rounded-full relative transition-colors duration-300 focus:outline-none"><span class="absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform duration-300 translate-x-5"></span></button>
+                                <button id="admin-toggle-deposits" class="w-11 h-6 bg-emerald-600 rounded-full relative transition-colors duration-300 focus:outline-none"><span class="absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform duration-300 translate-x-5"></span></button>
                             </div>
                             <div class="flex justify-between items-center">
                                 <span class="text-sm text-gray-300 font-bold">Вывод средств</span>
-                                <button class="w-11 h-6 bg-emerald-600 rounded-full relative transition-colors duration-300 focus:outline-none"><span class="absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform duration-300 translate-x-5"></span></button>
+                                <button id="admin-toggle-withdraws" class="w-11 h-6 bg-emerald-600 rounded-full relative transition-colors duration-300 focus:outline-none"><span class="absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform duration-300 translate-x-5"></span></button>
                             </div>
                         </div>
                     </div>
@@ -616,11 +616,11 @@
                         <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 space-y-4 shadow-inner">
                             <div class="flex flex-col gap-1.5">
                                 <label class="text-[10px] text-gray-500 uppercase font-bold">Бонус уровень 1 (%)</label>
-                                <input type="number" value="7" class="bg-gray-800 border border-gray-700 rounded-lg p-3 text-white font-mono focus:outline-none focus:border-blue-500 shadow-inner">
+                                <input type="number" id="admin-ref-lvl1" value="7" class="bg-gray-800 border border-gray-700 rounded-lg p-3 text-white font-mono focus:outline-none focus:border-blue-500 shadow-inner">
                             </div>
                             <div class="flex flex-col gap-1.5">
                                 <label class="text-[10px] text-gray-500 uppercase font-bold">Бонус уровень 2 (%)</label>
-                                <input type="number" value="5" class="bg-gray-800 border border-gray-700 rounded-lg p-3 text-white font-mono focus:outline-none focus:border-blue-500 shadow-inner">
+                                <input type="number" id="admin-ref-lvl2" value="5" class="bg-gray-800 border border-gray-700 rounded-lg p-3 text-white font-mono focus:outline-none focus:border-blue-500 shadow-inner">
                             </div>
                             <button data-action="save-rates" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3.5 rounded-lg mt-2 transition text-sm uppercase tracking-wider" data-i18n="app.admin_btn_save">Сохранить</button>
                         </div>
@@ -632,27 +632,27 @@
                             <div class="grid grid-cols-2 gap-3">
                                 <div class="flex flex-col gap-1.5">
                                     <label class="text-[9px] text-gray-400 uppercase font-bold" data-i18n="app.rarity_free">Бесплатный</label>
-                                    <input type="number" step="0.01" value="0.05" class="bg-gray-800 border border-gray-700 rounded-lg p-2.5 text-white font-mono text-xs focus:outline-none focus:border-gray-500 shadow-inner">
+                                    <input type="number" id="admin-rate-FREE" step="0.001" value="0.004" class="bg-gray-800 border border-gray-700 rounded-lg p-2.5 text-white font-mono text-xs focus:outline-none focus:border-gray-500 shadow-inner">
                                 </div>
                                 <div class="flex flex-col gap-1.5">
                                     <label class="text-[9px] text-green-400 uppercase font-bold" data-i18n="app.rarity_common">Обычный</label>
-                                    <input type="number" step="0.01" value="0.20" class="bg-gray-800 border border-gray-700 rounded-lg p-2.5 text-white font-mono text-xs focus:outline-none focus:border-green-500 shadow-inner">
+                                    <input type="number" id="admin-rate-COMMON" step="0.01" value="0.05" class="bg-gray-800 border border-gray-700 rounded-lg p-2.5 text-white font-mono text-xs focus:outline-none focus:border-green-500 shadow-inner">
                                 </div>
                                 <div class="flex flex-col gap-1.5">
                                     <label class="text-[9px] text-blue-400 uppercase font-bold" data-i18n="app.rarity_uncommon">Необычный</label>
-                                    <input type="number" step="0.01" value="0.75" class="bg-gray-800 border border-gray-700 rounded-lg p-2.5 text-white font-mono text-xs focus:outline-none focus:border-blue-500 shadow-inner">
+                                    <input type="number" id="admin-rate-UNCOMMON" step="0.01" value="0.057" class="bg-gray-800 border border-gray-700 rounded-lg p-2.5 text-white font-mono text-xs focus:outline-none focus:border-blue-500 shadow-inner">
                                 </div>
                                 <div class="flex flex-col gap-1.5">
                                     <label class="text-[9px] text-purple-400 uppercase font-bold" data-i18n="app.rarity_rare">Редкий</label>
-                                    <input type="number" step="0.01" value="2.50" class="bg-gray-800 border border-gray-700 rounded-lg p-2.5 text-white font-mono text-xs focus:outline-none focus:border-purple-500 shadow-inner">
+                                    <input type="number" id="admin-rate-RARE" step="0.01" value="0.068" class="bg-gray-800 border border-gray-700 rounded-lg p-2.5 text-white font-mono text-xs focus:outline-none focus:border-purple-500 shadow-inner">
                                 </div>
                                 <div class="flex flex-col gap-1.5">
                                     <label class="text-[9px] text-pink-400 uppercase font-bold" data-i18n="app.rarity_epic">Эпический</label>
-                                    <input type="number" step="0.01" value="8.00" class="bg-gray-800 border border-gray-700 rounded-lg p-2.5 text-white font-mono text-xs focus:outline-none focus:border-pink-500 shadow-inner">
+                                    <input type="number" id="admin-rate-EPIC" step="0.01" value="0.082" class="bg-gray-800 border border-gray-700 rounded-lg p-2.5 text-white font-mono text-xs focus:outline-none focus:border-pink-500 shadow-inner">
                                 </div>
                                 <div class="flex flex-col gap-1.5">
                                     <label class="text-[9px] text-yellow-400 uppercase font-bold" data-i18n="app.rarity_legendary">Легендарный</label>
-                                    <input type="number" step="0.01" value="30.00" class="bg-gray-800 border border-gray-700 rounded-lg p-2.5 text-white font-mono text-xs focus:outline-none focus:border-yellow-500 shadow-inner">
+                                    <input type="number" id="admin-rate-LEGENDARY" step="0.01" value="0.10" class="bg-gray-800 border border-gray-700 rounded-lg p-2.5 text-white font-mono text-xs focus:outline-none focus:border-yellow-500 shadow-inner">
                                 </div>
                             </div>
                             <button data-action="save-settings" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3.5 rounded-lg mt-2 transition text-sm uppercase tracking-wider" data-i18n="app.admin_btn_save">Сохранить</button>
