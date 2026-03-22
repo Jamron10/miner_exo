@@ -58,16 +58,7 @@
                         <input type="range" id="volume-slider" min="0" max="100" value="50" class="w-full accent-blue-500">
                     </div>
                 </div>
-                <!-- Lang -->
-                <div class="relative">
-                    <button id="btn-lang" class="w-9 h-9 px-2 rounded-xl bg-gray-800/50 flex items-center justify-center text-gray-400 hover:text-white transition hover:bg-gray-700 font-bold text-xs uppercase border border-gray-700/50">
-                        RU
-                    </button>
-                    <div id="lang-dropdown" class="absolute right-0 top-full mt-2 bg-gray-800 border border-gray-700 rounded-xl shadow-xl overflow-hidden hidden flex-col w-36 z-50">
-                        <button class="lang-option w-full text-left px-4 py-3 text-sm text-gray-300 hover:bg-gray-700 hover:text-white border-b border-gray-700/50" data-lang="ru">🇷🇺 Русский</button>
-                        <button class="lang-option w-full text-left px-4 py-3 text-sm text-gray-300 hover:bg-gray-700 hover:text-white" data-lang="en">🇬🇧 English</button>
-                    </div>
-                </div>
+
             </div>
         </div>
         
@@ -631,7 +622,7 @@
                                 <label class="text-[10px] text-gray-500 uppercase font-bold">Бонус уровень 2 (%)</label>
                                 <input type="number" value="5" class="bg-gray-800 border border-gray-700 rounded-lg p-3 text-white font-mono focus:outline-none focus:border-blue-500 shadow-inner">
                             </div>
-                            <button class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3.5 rounded-lg mt-2 transition text-sm uppercase tracking-wider" data-i18n="app.admin_btn_save">Сохранить</button>
+                            <button data-action="save-rates" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3.5 rounded-lg mt-2 transition text-sm uppercase tracking-wider" data-i18n="app.admin_btn_save">Сохранить</button>
                         </div>
                     </div>
 
@@ -664,7 +655,7 @@
                                     <input type="number" step="0.01" value="30.00" class="bg-gray-800 border border-gray-700 rounded-lg p-2.5 text-white font-mono text-xs focus:outline-none focus:border-yellow-500 shadow-inner">
                                 </div>
                             </div>
-                            <button class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3.5 rounded-lg mt-2 transition text-sm uppercase tracking-wider" data-i18n="app.admin_btn_save">Сохранить</button>
+                            <button data-action="save-settings" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3.5 rounded-lg mt-2 transition text-sm uppercase tracking-wider" data-i18n="app.admin_btn_save">Сохранить</button>
                         </div>
                     </div>
                 </div>
