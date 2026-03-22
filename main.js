@@ -375,6 +375,59 @@ async function loadState() {
             console.warn("Backend unavailable. Running in offline mode with local storage.");
         }
 
+        // 3.5 Fetch App Settings
+        try {
+            const settingsRes = await fetch(`${BACKEND_URL}/api/settings`);
+            if (settingsRes.ok) {
+                const settings = await settingsRes.json();
+                window.appSettings = settings;
+                
+                if (settings.rates) {
+                    Object.keys(settings.rates).forEach(k => {
+                        if (DRONES[k]) {
+                            DRONES[k].rateDay = settings.rates[k];
+                            DRONES[k].rate = settings.rates[k] / 86400;
+                        }
+                    });
+                }
+                
+                // Show maintenance screen if active
+                if (settings.isMaintenance) {
+                    const mOverlay = document.createElement('div');
+                    mOverlay.className = 'fixed inset-0 bg-gray-950 z-[999] flex flex-col items-center justify-center p-6 text-center';
+                    mOverlay.id = 'maintenance-overlay';
+                    mOverlay.innerHTML = `
+                        <div id="maintenance-admin-trigger" class="w-20 h-20 mb-6 bg-red-900/30 rounded-full flex items-center justify-center border border-red-500/50 cursor-pointer">
+                            <svg class="w-10 h-10 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                        </div>
+                        <h2 class="text-2xl font-black text-white mb-2">Технические работы</h2>
+                        <p class="text-gray-400 text-sm">Сервер временно недоступен. Мы обновляем систему, пожалуйста, зайдите позже.</p>
+                    `;
+                    document.body.appendChild(mOverlay);
+                    
+                    let mcClicks = 0;
+                    let mcTimer = null;
+                    document.getElementById('maintenance-admin-trigger').addEventListener('click', () => {
+                        mcClicks++;
+                        clearTimeout(mcTimer);
+                        if (mcClicks >= 5) {
+                            mOverlay.style.display = 'none';
+                            const viewAdmin = document.getElementById('view-admin');
+                            if(viewAdmin) {
+                                viewAdmin.classList.remove('hidden');
+                                viewAdmin.classList.add('flex');
+                                if(typeof loadAdminData === 'function') loadAdminData();
+                            }
+                        } else {
+                            mcTimer = setTimeout(() => { mcClicks = 0; }, 500);
+                        }
+                    });
+                    
+                    return; // Stop execution
+                }
+            }
+        } catch(e) { console.warn("App settings fetch failed"); }
+
         // 4. Offline mining calculation based on state
         const now = Date.now();
         const timeDiff = Math.min(now - window.state.lastUpdate, 24 * 60 * 60 * 1000);
@@ -1046,7 +1099,13 @@ function setupWallet() {
             if (btn) btn.disabled = true;
             
             try {
-                const res = await fetch(`${BACKEND_URL}/api/user/deposit_request`, {
+                if (window.appSettings && window.appSettings.depositsEnabled === false) {
+                showToast('Пополнение временно отключено');
+                if (btn) btn.disabled = false;
+                return;
+            }
+            
+            const res = await fetch(`${BACKEND_URL}/api/user/deposit_request`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ tgId: window.state.memo, amount, memo: window.state.memo })
@@ -1096,7 +1155,13 @@ function setupWallet() {
             if (btn) btn.disabled = true;
             
             try {
-                const res = await fetch(`${BACKEND_URL}/api/user/withdraw`, {
+                if (window.appSettings && window.appSettings.withdrawsEnabled === false) {
+                showToast('Вывод средств временно отключен');
+                if (btn) btn.disabled = false;
+                return;
+            }
+            
+            const res = await fetch(`${BACKEND_URL}/api/user/withdraw`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ tgId: window.state.memo, amount, address })
@@ -1174,6 +1239,18 @@ function setupWallet() {
 
 // Referrals
 function renderReferrals() {
+    const lvl1Percent = window.appSettings?.refLvl1 || 7;
+    const lvl2Percent = window.appSettings?.refLvl2 || 5;
+    
+    // Update texts if elements exist
+    const descEl = document.querySelector('[data-i18n="app.ref_desc_new"]');
+    if (descEl) descEl.textContent = `Зарабатывай ${lvl1Percent}% с прямых рефералов и ${lvl2Percent}% с их рефералов с каждого депозита!`;
+    
+    const lvl1TitleEl = document.querySelector('[data-i18n="app.ref_lvl1_title"]');
+    if (lvl1TitleEl) lvl1TitleEl.textContent = `Уровень 1 (${lvl1Percent}%)`;
+    
+    const lvl2TitleEl = document.querySelector('[data-i18n="app.ref_lvl2_title"]');
+    if (lvl2TitleEl) lvl2TitleEl.textContent = `Уровень 2 (${lvl2Percent}%)`;
     const lvl1 = document.getElementById('ref-lvl1-count');
     const lvl2 = document.getElementById('ref-lvl2-count');
     const profit = document.getElementById('ref-total-profit');
