@@ -9,7 +9,7 @@ const TelegramBot = require('node-telegram-bot-api');
 // ⚙️ НАСТРОЙКИ (Замените на свои данные)
 // ==========================================
 const MONGO_URI = "mongodb+srv://jamron:WV5nO1UIvofK01Nl@cluster0.ucx8kac.mongodb.net/?appName=Cluster0";
-const BOT_TOKEN = "8307131916:AAE4tBL6kaRSG2GeuHihvBt9sBFdPPqku_c"; 
+const BOT_TOKEN = "8307131916:AAHdrVm2w4QmpOS0n3DxemxeQzSqSqtUikc"; 
 const WEB_APP_URL = "https://miner-exo.onrender.com"; // Например: https://t.me/ExoMinerBot/app
 const ADMIN_LIST = ['5730406030', '7166133241'];
 
@@ -65,14 +65,7 @@ const SettingsSchema = new mongoose.Schema({
     depositAddress: { type: String, default: 'UQAZ4SVVMcdWdemuzKbU-hUe6oZ33Heg8xNzGmhl_J-XT54c' },
     refLvl1: { type: Number, default: 7 },
     refLvl2: { type: Number, default: 5 },
-    rates: {
-      FREE: { type: Number, default: 0.004 },
-            COMMON: { type: Number, default: 0.050 },
-            UNCOMMON: { type: Number, default: 0.057 },
-            RARE: { type: Number, default: 0.068 },
-            EPIC: { type: Number, default: 0.082 },
-            LEGENDARY: { type: Number, default: 0.100 }
-           }
+    rates: {\n        FREE: { type: Number, default: 0.004 },\n        COMMON: { type: Number, default: 0.050 },\n        UNCOMMON: { type: Number, default: 0.057 },\n        RARE: { type: Number, default: 0.068 },\n        EPIC: { type: Number, default: 0.082 },\n        LEGENDARY: { type: Number, default: 0.100 }\n    }
 });
 const Settings = mongoose.model('Settings', SettingsSchema);
 
