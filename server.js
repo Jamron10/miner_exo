@@ -9,7 +9,7 @@ const TelegramBot = require('node-telegram-bot-api');
 // ⚙️ НАСТРОЙКИ (Замените на свои данные)
 // ==========================================
 const MONGO_URI = "mongodb+srv://jamron:WV5nO1UIvofK01Nl@cluster0.ucx8kac.mongodb.net/?appName=Cluster0";
-const BOT_TOKEN = "8307131916:AAGOGNk-m5p3edcfwVVZve-PrqeIM8bt56A"; 
+const BOT_TOKEN = "8307131916:AAGS2dX8o-SZ3t53iS-8O4bPmEmVAd_jjng"; 
 const WEB_APP_URL = "https://miner-exo.onrender.com"; // Например: https://t.me/ExoMinerBot/app
 
 
@@ -23,6 +23,7 @@ mongoose.connect(MONGO_URI)
 
 // --- Схема пользователя ---
 const UserSchema = new mongoose.Schema({
+  id: String, // Legacy field
   tgId: { type: String, required: true, unique: true },
   username: String,
   firstName: String,
@@ -75,7 +76,13 @@ bot.onText(/\/start(?: (.*))?/, async (msg, match) => {
         // Если пользователя нет в базе — регистрируем его
         if (!user) {
             user = new User({ 
-                tgId, username, firstName, depositBalance: 0, miningBalance: 0, drones: []
+                id: tgId, // Заполняем legacy id тем же tgId, чтобы избежать ошибки E11000 duplicate key
+                tgId, 
+                username, 
+                firstName, 
+                depositBalance: 0, 
+                miningBalance: 0, 
+                drones: []
             });
 
             // Логика реферальной системы
@@ -146,7 +153,16 @@ app.get('/api/user/:tgId', async (req, res) => {
 app.post('/api/user/sync', async (req, res) => {
   try {
     const { tgId, miningBalance, depositBalance, drones, username, firstName } = req.body;
-    const updateData = { miningBalance, drones, username, firstName, lastSync: Date.now() };
+    // Включаем id: tgId в updateData для случаев создания нового пользователя при upsert,
+    // чтобы не было ошибки E11000 null duplicate key
+    const updateData = { 
+        id: tgId, 
+        miningBalance, 
+        drones, 
+        username, 
+        firstName, 
+        lastSync: Date.now() 
+    };
     if (depositBalance !== undefined) updateData.depositBalance = depositBalance;
     
     const user = await User.findOneAndUpdate(
