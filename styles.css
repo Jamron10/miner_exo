@@ -131,3 +131,217 @@ body {
     100% { transform: scale(1); opacity: 1; }
 }
 
+
+/* ========================================================================= */
+/* MEGA OVERHAUL UPDATE V2.0 - CYBERPUNK / HIGH-END GLASSMORPHISM            */
+/* ========================================================================= */
+
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800;900&family=Space+Grotesk:wght@400;700;800&display=swap');
+
+:root {
+  --neon-cyan: #00f3ff;
+  --neon-purple: #bc13fe;
+  --glass-bg: rgba(10, 10, 15, 0.45);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.6);
+}
+
+/* Global Font & Background overrides */
+body {
+  font-family: 'Outfit', sans-serif !important;
+  background-color: #030305 !important;
+  background-image: 
+    radial-gradient(circle at 15% 50%, rgba(0, 243, 255, 0.08), transparent 35%),
+    radial-gradient(circle at 85% 30%, rgba(188, 19, 254, 0.08), transparent 35%),
+    radial-gradient(circle at 50% 100%, rgba(16, 185, 129, 0.05), transparent 40%) !important;
+  background-attachment: fixed !important;
+}
+
+/* Transform all monospace elements into Space Grotesk */
+.font-mono {
+  font-family: 'Space Grotesk', monospace !important;
+  letter-spacing: -0.05em;
+}
+
+/* Global Glassmorphism & Cyberpunk Cards 
+   (Automatically upgrades all Tailwind gray backgrounds) */
+.bg-gray-900, .bg-gray-950, .bg-gray-800, 
+.bg-gray-900\/40, .bg-gray-900\/60, .bg-gray-900\/80, .bg-gray-900\/95,
+.bg-gray-800\/30, .bg-gray-800\/50, .bg-gray-950\/20 {
+  background: var(--glass-bg) !important;
+  backdrop-filter: blur(24px) !important;
+  -webkit-backdrop-filter: blur(24px) !important;
+  border-color: var(--glass-border) !important;
+  box-shadow: var(--glass-shadow) !important;
+}
+
+/* Make rounded corners smoother */
+.rounded-xl, .rounded-2xl, .rounded-3xl, .rounded-\[2rem\] {
+  border-radius: 1.5rem !important;
+}
+
+/* Mega Glowing Main Counter */
+#mining-counter {
+  font-size: 3.5rem !important;
+  font-weight: 800 !important;
+  background: linear-gradient(135deg, #fff 0%, #00f3ff 50%, #bc13fe 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: 0 0 40px rgba(0, 243, 255, 0.3);
+  filter: drop-shadow(0 0 10px rgba(188, 19, 254, 0.2));
+  line-height: 1.1;
+}
+
+/* Enhanced 3D Canvas Container */
+#planet-3d-container {
+  filter: drop-shadow(0 0 30px rgba(0,243,255,0.2));
+  animation: floatPlanet 6s ease-in-out infinite;
+  opacity: 1 !important;
+}
+
+/* Animated Grid overlay */
+body::before {
+  content: '';
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background-image: 
+    linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+  background-size: 40px 40px;
+  z-index: -1;
+  pointer-events: none;
+  mask-image: radial-gradient(circle at center, black 50%, transparent 100%);
+  -webkit-mask-image: radial-gradient(circle at center, black 50%, transparent 100%);
+  animation: gridMove 20s linear infinite;
+}
+
+@keyframes gridMove {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(40px); }
+}
+@keyframes floatPlanet {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-15px); }
+}
+
+/* Button Mega Effects */
+button {
+  transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+}
+button:hover {
+  transform: translateY(-2px) scale(1.03) !important;
+  box-shadow: 0 10px 25px -5px rgba(0, 243, 255, 0.4) !important;
+}
+button:active {
+  transform: translateY(1px) scale(0.97) !important;
+}
+
+#btn-claim {
+  background: linear-gradient(135deg, var(--neon-cyan), var(--neon-purple)) !important;
+  box-shadow: 0 0 30px rgba(0, 243, 255, 0.5) !important;
+  animation: pulseGlow 2s infinite;
+}
+
+@keyframes pulseGlow {
+  0%, 100% { box-shadow: 0 0 20px rgba(0, 243, 255, 0.5), 0 0 40px rgba(188, 19, 254, 0.3); }
+  50% { box-shadow: 0 0 40px rgba(0, 243, 255, 0.8), 0 0 60px rgba(188, 19, 254, 0.6); }
+}
+
+/* Staggered View Entry Animations (Applies to all tabs instantly) */
+.view-section.active > div, 
+.view-section.active > h2, 
+.view-section.active > nav,
+.wallet-tab-content.block > div {
+  animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  opacity: 0;
+}
+.view-section.active > *:nth-child(1) { animation-delay: 0.05s; }
+.view-section.active > *:nth-child(2) { animation-delay: 0.1s; }
+.view-section.active > *:nth-child(3) { animation-delay: 0.15s; }
+.view-section.active > *:nth-child(4) { animation-delay: 0.2s; }
+.view-section.active > *:nth-child(5) { animation-delay: 0.25s; }
+.view-section.active > *:nth-child(6) { animation-delay: 0.3s; }
+
+/* Navigation Bar Mega Style */
+nav.absolute.bottom-0 {
+  background: rgba(5, 5, 10, 0.85) !important;
+  backdrop-filter: blur(30px) !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.05) !important;
+  box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.5) !important;
+}
+.nav-item { transition: color 0.3s ease; }
+.nav-item:hover { color: #fff; }
+.nav-item.active {
+  color: var(--neon-cyan) !important;
+  text-shadow: 0 0 10px rgba(0, 243, 255, 0.5);
+}
+.nav-item.active .relative .absolute {
+  background: var(--neon-cyan) !important;
+  opacity: 0.6;
+  filter: blur(12px);
+  transform: scale(1.5);
+}
+
+/* Hover/Focus enhancements on inputs and cards */
+#hangar-list > div, #shop-list > div, .wallet-tab-content .group {
+  border-left: 2px solid transparent;
+  transition: all 0.3s ease;
+}
+#hangar-list > div:hover, #shop-list > div:hover, .wallet-tab-content .group:hover {
+  border-left-color: var(--neon-cyan);
+  transform: translateX(5px);
+  box-shadow: -5px 0 20px rgba(0,243,255,0.1) !important;
+}
+
+/* Loading Screen Hologram Effect */
+#loading-overlay {
+  background: #020203 !important;
+  background-image: radial-gradient(circle at center, rgba(0, 243, 255, 0.1), transparent 50%) !important;
+}
+#loading-overlay h2 {
+  font-family: 'Space Grotesk', monospace !important;
+  background: linear-gradient(135deg, #fff 0%, #00f3ff 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: 0 0 20px rgba(0, 243, 255, 0.5);
+  animation: pulseGlow 2s infinite;
+}
+
+/* ========================================================================= */
+/* ADMIN PANEL CYBER-SITH OVERHAUL                                           */
+/* ========================================================================= */
+#view-admin {
+  background: rgba(5, 5, 10, 0.95) !important;
+  backdrop-filter: blur(40px) !important;
+}
+#admin-content-area .bg-gray-900 {
+  background: linear-gradient(135deg, rgba(255,0,0,0.05) 0%, rgba(20,0,0,0.5) 100%) !important;
+  border-color: rgba(239, 68, 68, 0.3) !important;
+  box-shadow: inset 0 0 20px rgba(239,68,68,0.05), 0 10px 30px rgba(0,0,0,0.5) !important;
+  transition: all 0.3s ease;
+}
+#admin-content-area .bg-gray-900:hover {
+  border-color: rgba(239, 68, 68, 0.6) !important;
+  box-shadow: inset 0 0 30px rgba(239,68,68,0.1), 0 10px 40px rgba(239,68,68,0.15) !important;
+}
+
+/* Admin Tabs */
+.admin-tab-btn.active {
+  background: rgba(239, 68, 68, 0.15) !important;
+  border-color: rgba(239, 68, 68, 0.4) !important;
+  box-shadow: 0 0 20px rgba(239,68,68,0.2), inset 0 0 15px rgba(239,68,68,0.2) !important;
+}
+#admin-content-area h3 {
+  color: #f87171 !important; /* Red text for headers */
+  text-shadow: 0 0 10px rgba(239,68,68,0.3);
+}
+
+/* Toast Enhancements */
+#toast-container > div {
+  background: var(--glass-bg) !important;
+  backdrop-filter: blur(20px) !important;
+  border: 1px solid var(--neon-cyan) !important;
+  box-shadow: 0 0 20px rgba(0,243,255,0.2) !important;
+  border-radius: 100px !important;
+  font-family: 'Space Grotesk', monospace !important;
+}
