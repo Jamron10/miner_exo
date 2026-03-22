@@ -65,7 +65,14 @@ const SettingsSchema = new mongoose.Schema({
     depositAddress: { type: String, default: 'UQAZ4SVVMcdWdemuzKbU-hUe6oZ33Heg8xNzGmhl_J-XT54c' },
     refLvl1: { type: Number, default: 7 },
     refLvl2: { type: Number, default: 5 },
-    rates: {\n        FREE: { type: Number, default: 0.004 },\n        COMMON: { type: Number, default: 0.050 },\n        UNCOMMON: { type: Number, default: 0.057 },\n        RARE: { type: Number, default: 0.068 },\n        EPIC: { type: Number, default: 0.082 },\n        LEGENDARY: { type: Number, default: 0.100 }\n    }
+    rates: {
+      FREE: { type: Number, default: 0.004 },
+      COMMON: { type: Number, default: 0.050 },
+      UNCOMMON: { type: Number, default: 0.057 },
+      RARE: { type: Number, default: 0.068 },
+      EPIC: { type: Number, default: 0.082 },
+      LEGENDARY: { type: Number, default: 0.100 }
+    }
 });
 const Settings = mongoose.model('Settings', SettingsSchema);
 
