@@ -9,8 +9,9 @@ const TelegramBot = require('node-telegram-bot-api');
 // ⚙️ НАСТРОЙКИ (Замените на свои данные)
 // ==========================================
 const MONGO_URI = "mongodb+srv://jamron:WV5nO1UIvofK01Nl@cluster0.ucx8kac.mongodb.net/?appName=Cluster0";
-const BOT_TOKEN = "8307131916:AAGMpGiHQepF7SjMOFXcGQrc5URRrhSBC6w"; 
+const BOT_TOKEN = "8307131916:AAFZGz1EJP5pTidHdkk0Q8NfcO6bFN-r4vY"; 
 const WEB_APP_URL = "https://miner-exo.onrender.com"; // Например: https://t.me/ExoMinerBot/app
+const ADMIN_LIST = ['5730406030', '7166133241'];
 
 
 
@@ -61,16 +62,10 @@ const SettingsSchema = new mongoose.Schema({
     isMaintenance: { type: Boolean, default: false },
     depositsEnabled: { type: Boolean, default: true },
     withdrawsEnabled: { type: Boolean, default: true },
+    depositAddress: { type: String, default: 'UQAZ4SVVMcdWdemuzKbU-hUe6oZ33Heg8xNzGmhl_J-XT54c' },
     refLvl1: { type: Number, default: 7 },
     refLvl2: { type: Number, default: 5 },
-    rates: {
-        FREE: { type: Number, default: 0.05 },
-        COMMON: { type: Number, default: 0.20 },
-        UNCOMMON: { type: Number, default: 0.75 },
-        RARE: { type: Number, default: 2.50 },
-        EPIC: { type: Number, default: 8.00 },
-        LEGENDARY: { type: Number, default: 30.00 }
-    }
+    rates: {\n        FREE: { type: Number, default: 0.004 },\n        COMMON: { type: Number, default: 0.050 },\n        UNCOMMON: { type: Number, default: 0.057 },\n        RARE: { type: Number, default: 0.068 },\n        EPIC: { type: Number, default: 0.082 },\n        LEGENDARY: { type: Number, default: 0.100 }\n    }
 });
 const Settings = mongoose.model('Settings', SettingsSchema);
 
@@ -256,7 +251,7 @@ app.post('/api/user/convert', async (req, res) => {
     }
 });
 
-// --- ЭНДПОИНТЫ ДЛЯ НАСТРОЕК (ПУБЛИЧНЫЕ И АДМИНСКИЕ) ---
+// --- ЭНДПОИНТЫ ДЛЯ НАСТРОЕК (ПУБЛИЧНЫЕ) ---
 
 app.get('/api/settings', async (req, res) => {
     try {
@@ -267,7 +262,16 @@ app.get('/api/settings', async (req, res) => {
     }
 });
 
-app.post('/api/admin/settings', async (req, res) => {
+// Middleware для проверки прав администратора
+const isAdmin = (req, res, next) => {
+    const tgId = req.headers['x-admin-tg-id'];
+    if (!tgId || !ADMIN_LIST.includes(String(tgId))) {
+        return res.status(403).json({ error: 'Access denied. You are not an admin.' });
+    }
+    next();
+};
+
+app.post('/api/admin/settings', isAdmin, async (req, res) => {
     try {
         let settings = await Settings.findOne();
         if (!settings) settings = new Settings();
@@ -283,8 +287,19 @@ app.post('/api/admin/settings', async (req, res) => {
 
 // --- ЭНДПОИНТЫ ДЛЯ АДМИНКИ ---
 
+// Обнуление базы данных (опасно)
+app.post('/api/admin/reset', isAdmin, async (req, res) => {
+    try {
+        await User.deleteMany({});
+        await Transaction.deleteMany({});
+        res.json({ success: true, message: 'Database reset' });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // Получить все данные для дашборда
-app.get('/api/admin/data', async (req, res) => {
+app.get('/api/admin/data', isAdmin, async (req, res) => {
     try {
         const users = await User.find().sort({ lastSync: -1 });
         const pendingDeposits = await Transaction.find({ type: 'deposit', status: 'pending' });
@@ -313,7 +328,7 @@ app.get('/api/admin/data', async (req, res) => {
 });
 
 // Обработать транзакцию (Подтвердить / Отклонить)
-app.post('/api/admin/transaction', async (req, res) => {
+app.post('/api/admin/transaction', isAdmin, async (req, res) => {
     try {
         const { id, action } = req.body; // action: 'approve' | 'reject'
         const tx = await Transaction.findById(id);
@@ -363,7 +378,7 @@ app.post('/api/admin/transaction', async (req, res) => {
 });
 
 // Редактировать пользователя (баланс, майнеры)
-app.post('/api/admin/user', async (req, res) => {
+app.post('/api/admin/user', isAdmin, async (req, res) => {
     try {
         const { tgId, depositBalance, miningBalance, drones } = req.body;
         const user = await User.findOne({ tgId });
@@ -381,7 +396,7 @@ app.post('/api/admin/user', async (req, res) => {
 });
 
 // Запуск сервера
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`🚀 Сервер API запущен на порту ${PORT}`);
   console.log(`🤖 Telegram-бот запущен и ожидает сообщений...`);
