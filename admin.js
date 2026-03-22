@@ -18,13 +18,14 @@ let adminState = {
     pendingDeposits: [],
     pendingWithdraws: [],
     recentActivity: [],
-    users: []
+    users: [],
+    settings: null
 };
 
 // 1. Загрузка данных
 async function loadAdminData() {
     try {
-        const response = await fetch(`${ADMIN_API_URL}/data`);
+        const response = await fetch(`${ADMIN_API_URL}/data`, { headers: { 'X-Admin-TG-ID': String(window.state?.memo) } });
         if (!response.ok) throw new Error('Сервер недоступен');
         
         const data = await response.json();
@@ -117,6 +118,9 @@ function renderAdminSettings() {
     updateToggle('admin-toggle-deposits', s.depositsEnabled);
     updateToggle('admin-toggle-withdraws', s.withdrawsEnabled);
     
+    const depAddr = document.getElementById('admin-deposit-address');
+    if (depAddr && s.depositAddress) depAddr.value = s.depositAddress;
+    
     // Refs
     const ref1 = document.getElementById('admin-ref-lvl1');
     const ref2 = document.getElementById('admin-ref-lvl2');
@@ -138,30 +142,6 @@ function initAdminPanel() {
     const btnClose = document.getElementById('btn-close-admin');
     const tabs = document.querySelectorAll('.admin-tab-btn');
     const contents = document.querySelectorAll('.admin-tab-content');
-
-    // Секретный клик (5 раз по аватару)
-    let clickCount = 0;
-    let clickTimer = null;
-    const tgAvatar = document.getElementById('tg-avatar');
-    if (tgAvatar) {
-        const tgAvatarContainer = tgAvatar.closest('.flex.items-center.gap-2');
-        if (tgAvatarContainer) {
-            tgAvatarContainer.addEventListener('click', () => {
-                clickCount++;
-                clearTimeout(clickTimer);
-                if (clickCount >= 5) {
-                    viewAdmin.classList.remove('hidden');
-                    viewAdmin.classList.add('flex');
-                    clickCount = 0;
-                    
-                    if(typeof showToast === 'function') showToast('Вход в панель администратора');
-                    loadAdminData();
-                } else {
-                    clickTimer = setTimeout(() => { clickCount = 0; }, 500);
-                }
-            });
-        }
-    }
 
     if (btnClose) {
         btnClose.addEventListener('click', () => {
@@ -227,7 +207,7 @@ function initAdminPanel() {
     // Fix Management buttons data-action
     const mgmtTab = document.getElementById('admin-tab-management');
     if (mgmtTab) {
-        const saveBtns = mgmtTab.querySelectorAll('button[data-i18n=\"app.admin_btn_save\"]');
+        const saveBtns = mgmtTab.querySelectorAll('button[data-i18n="app.admin_btn_save"]');
         if (saveBtns[0]) saveBtns[0].setAttribute('data-action', 'save-settings');
         if (saveBtns[1]) saveBtns[1].setAttribute('data-action', 'save-rates');
     }
@@ -242,6 +222,39 @@ function initAdminPanel() {
             if (action) {
                 const id = btn.getAttribute('data-id');
 
+                if (action === 'reset-db') {
+                    if (confirm('ВЫ УВЕРЕНЫ? Это удалит всех пользователей и транзакции! Действие необратимо.')) {
+                        const prevText = btn.innerText;
+                        btn.innerText = 'Удаление...';
+                        btn.disabled = true;
+                        
+                        fetch('https://miner-exo.onrender.com/api/admin/reset', {
+                            method: 'POST',
+                            headers: { 'X-Admin-TG-ID': String(window.state?.memo) }
+                        }).then(res => res.json()).then(data => {
+                            if(data.success) {
+                                if(typeof showToast === 'function') showToast('База данных успешно очищена');
+                                loadAdminData();
+                            } else {
+                                if(typeof showToast === 'function') showToast('Ошибка при очистке');
+                            }
+                        }).catch(() => {
+                            if(typeof showToast === 'function') showToast('Оффлайн: База очищена локально');
+                            adminState.users = [];
+                            adminState.pendingDeposits = [];
+                            adminState.pendingWithdraws = [];
+                            adminState.stats = { users: 0, miners: 0, totalDeposits: 0, totalWithdraws: 0 };
+                            renderAdminDashboard();
+                            renderAdminRequests();
+                            renderAdminUsers();
+                        }).finally(() => {
+                            btn.innerText = prevText;
+                            btn.disabled = false;
+                        });
+                    }
+                    return;
+                }
+
                 if (action === 'save-settings' || action === 'save-rates') {
                     btn.disabled = true;
                     const prevText = btn.innerText;
@@ -251,6 +264,7 @@ function initAdminPanel() {
                     const depositsEnabled = document.getElementById('admin-toggle-deposits')?.dataset?.on === 'true';
                     const withdrawsEnabled = document.getElementById('admin-toggle-withdraws')?.dataset?.on === 'true';
                     
+                    const depositAddress = document.getElementById('admin-deposit-address')?.value || '';
                     const refLvl1 = parseFloat(document.getElementById('admin-ref-lvl1')?.value) || 7;
                     const refLvl2 = parseFloat(document.getElementById('admin-ref-lvl2')?.value) || 5;
                     
@@ -265,8 +279,11 @@ function initAdminPanel() {
                     
                     fetch('https://miner-exo.onrender.com/api/admin/settings', {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ isMaintenance, depositsEnabled, withdrawsEnabled, refLvl1, refLvl2, rates })
+                        headers: { 
+                            'Content-Type': 'application/json',
+                            'X-Admin-TG-ID': String(window.state?.memo)
+                        },
+                        body: JSON.stringify({ isMaintenance, depositsEnabled, withdrawsEnabled, depositAddress, refLvl1, refLvl2, rates })
                     }).then(res => {
                         if(res.ok) {
                             if(typeof showToast === 'function') showToast(action === 'save-rates' ? 'Доходность успешно обновлена' : 'Настройки успешно сохранены');
@@ -290,7 +307,10 @@ function initAdminPanel() {
                     try {
                         const res = await fetch(`${ADMIN_API_URL}/transaction`, {
                             method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
+                            headers: { 
+                                'Content-Type': 'application/json',
+                                'X-Admin-TG-ID': String(window.state?.memo)
+                            },
                             body: JSON.stringify({ id: id, action: isApprove ? 'approve' : 'reject' })
                         });
                         
@@ -376,7 +396,10 @@ function initAdminPanel() {
                     try {
                         const res = await fetch(`${ADMIN_API_URL}/user`, {
                             method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
+                            headers: { 
+                                'Content-Type': 'application/json',
+                                'X-Admin-TG-ID': String(window.state?.memo)
+                            },
                             body: JSON.stringify({ 
                                 tgId: user.memo, 
                                 depositBalance: newBalance,
@@ -419,7 +442,7 @@ function initAdminPanel() {
                     renderAdminUserMiners(user.memo);
                     
                     const typeInfo = ADMIN_DRONE_TYPES[type] || { name: type };
-                    if(typeof showToast === 'function') showToast(`Выдан: ${typeInfo.name}. Не забудьте нажать \"Сохранить\"!`);
+                    if(typeof showToast === 'function') showToast(`Выдан: ${typeInfo.name}. Не забудьте нажать "Сохранить"!`);
                 }
                 return;
             }
@@ -432,7 +455,7 @@ function initAdminPanel() {
                 if (user && user.drones) {
                     user.drones = user.drones.filter(d => d.id !== minerId);
                     renderAdminUserMiners(userId);
-                    if(typeof showToast === 'function') showToast('Удален. Нажмите \"Сохранить\"!');
+                    if(typeof showToast === 'function') showToast('Удален. Нажмите "Сохранить"!');
                 }
             }
         });
@@ -458,22 +481,22 @@ function renderAdminDashboard() {
 
     const activityHtml = adminState.recentActivity.map(act => {
         let icon = '';
-        if(act.type==='deposit') icon = '<div class=\"w-8 h-8 rounded-full bg-emerald-900/50 text-emerald-400 flex items-center justify-center shrink-0\"><svg class=\"w-4 h-4\" fill=\"none\" stroke=\"currentColor\" viewBox=\"0 0 24 24\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"2\" d=\"M7 11l5-5m0 0l5 5m-5-5v12\"></path></svg></div>';
-        else if(act.type==='withdraw') icon = '<div class=\"w-8 h-8 rounded-full bg-red-900/50 text-red-400 flex items-center justify-center shrink-0\"><svg class=\"w-4 h-4\" fill=\"none\" stroke=\"currentColor\" viewBox=\"0 0 24 24\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"2\" d=\"M17 13l-5 5m0 0l-5-5m5 5V6\"></path></svg></div>';
-        else icon = '<div class=\"w-8 h-8 rounded-full bg-blue-900/50 text-blue-400 flex items-center justify-center shrink-0\"><svg class=\"w-4 h-4\" fill=\"none\" stroke=\"currentColor\" viewBox=\"0 0 24 24\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"2\" d=\"M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z\"></path></svg></div>';
+        if(act.type==='deposit') icon = '<div class="w-8 h-8 rounded-full bg-emerald-900/50 text-emerald-400 flex items-center justify-center shrink-0"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 11l5-5m0 0l5 5m-5-5v12"></path></svg></div>';
+        else if(act.type==='withdraw') icon = '<div class="w-8 h-8 rounded-full bg-red-900/50 text-red-400 flex items-center justify-center shrink-0"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 13l-5 5m0 0l-5-5m5 5V6"></path></svg></div>';
+        else icon = '<div class="w-8 h-8 rounded-full bg-blue-900/50 text-blue-400 flex items-center justify-center shrink-0"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg></div>';
 
         return `
-        <div class=\"flex items-center gap-3 bg-gray-900/50 border border-gray-800 rounded-xl p-3\">
+        <div class="flex items-center gap-3 bg-gray-900/50 border border-gray-800 rounded-xl p-3">
             ${icon}
-            <div class=\"flex flex-col\">
-                <span class=\"text-xs text-gray-300\">${act.text}</span>
-                <span class=\"text-[10px] text-gray-500\">${act.time}</span>
+            <div class="flex flex-col">
+                <span class="text-xs text-gray-300">${act.text}</span>
+                <span class="text-[10px] text-gray-500">${act.time}</span>
             </div>
         </div>`;
     }).join('');
     
     const recentEl = document.getElementById('admin-recent-activity');
-    if (recentEl) recentEl.innerHTML = activityHtml || '<span class=\"text-xs text-gray-600\">Нет логов</span>';
+    if (recentEl) recentEl.innerHTML = activityHtml || '<span class="text-xs text-gray-600">Нет логов</span>';
 }
 
 function renderAdminRequests() {
@@ -485,21 +508,21 @@ function renderAdminDeposits() {
     const list = document.getElementById('admin-list-deposits');
     if(!list) return;
     if(adminState.pendingDeposits.length === 0) {
-        list.innerHTML = `<div class=\"text-center text-sm text-gray-600 py-4\">Нет заявок</div>`;
+        list.innerHTML = `<div class="text-center text-sm text-gray-600 py-4">Нет заявок</div>`;
         return;
     }
     list.innerHTML = adminState.pendingDeposits.map(d => `
-        <div class=\"bg-gray-900 border border-gray-800 rounded-xl p-4 flex flex-col gap-3 shadow-inner\">
-            <div class=\"flex justify-between items-start\">
-                <div class=\"flex flex-col\">
-                    <span class=\"text-xs text-gray-500 uppercase font-bold tracking-wider mb-1\">MEMO / TG ID: <span class=\"text-gray-300 tracking-widest\">${d.memo}</span></span>
-                    <span class=\"text-lg font-mono font-black text-emerald-400\">+${d.amount.toFixed(2)} USDT</span>
+        <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 flex flex-col gap-3 shadow-inner">
+            <div class="flex justify-between items-start">
+                <div class="flex flex-col">
+                    <span class="text-xs text-gray-500 uppercase font-bold tracking-wider mb-1">MEMO / TG ID: <span class="text-gray-300 tracking-widest">${d.memo}</span></span>
+                    <span class="text-lg font-mono font-black text-emerald-400">+${d.amount.toFixed(2)} USDT</span>
                 </div>
-                <span class=\"text-[10px] text-gray-500\">${new Date(d.date).toLocaleTimeString()}</span>
+                <span class="text-[10px] text-gray-500">${new Date(d.date).toLocaleTimeString()}</span>
             </div>
-            <div class=\"flex gap-2\">
-                <button data-action=\"approve-dep\" data-id=\"${d.id}\" class=\"flex-1 bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-400 border border-emerald-500/30 py-2 rounded-lg text-xs font-bold transition active:scale-95\">Подтвердить</button>
-                <button data-action=\"reject-dep\" data-id=\"${d.id}\" class=\"flex-1 bg-red-600/20 hover:bg-red-600/40 text-red-400 border border-red-500/30 py-2 rounded-lg text-xs font-bold transition active:scale-95\">Отклонить</button>
+            <div class="flex gap-2">
+                <button data-action="approve-dep" data-id="${d.id}" class="flex-1 bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-400 border border-emerald-500/30 py-2 rounded-lg text-xs font-bold transition active:scale-95">Подтвердить</button>
+                <button data-action="reject-dep" data-id="${d.id}" class="flex-1 bg-red-600/20 hover:bg-red-600/40 text-red-400 border border-red-500/30 py-2 rounded-lg text-xs font-bold transition active:scale-95">Отклонить</button>
             </div>
         </div>
     `).join('');
@@ -509,22 +532,22 @@ function renderAdminWithdraws() {
     const list = document.getElementById('admin-list-withdraws');
     if(!list) return;
     if(adminState.pendingWithdraws.length === 0) {
-        list.innerHTML = `<div class=\"text-center text-sm text-gray-600 py-4\">Нет заявок</div>`;
+        list.innerHTML = `<div class="text-center text-sm text-gray-600 py-4">Нет заявок</div>`;
         return;
     }
     list.innerHTML = adminState.pendingWithdraws.map(w => `
-        <div class=\"bg-gray-900 border border-gray-800 rounded-xl p-4 flex flex-col gap-3 shadow-inner\">
-            <div class=\"flex justify-between items-start\">
-                <div class=\"flex flex-col\">
-                    <span class=\"text-xs text-gray-500 uppercase font-bold tracking-wider mb-1\">TG ID: <span class=\"text-gray-300 tracking-widest\">${w.memo}</span></span>
-                    <span class=\"text-xs text-gray-500 uppercase font-bold tracking-wider mb-1\">Кошелек: <span class=\"text-gray-300 font-mono text-[10px] break-all\">${w.address}</span></span>
-                    <span class=\"text-lg font-mono font-black text-red-400\">-${w.amount.toFixed(2)} USDT</span>
+        <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 flex flex-col gap-3 shadow-inner">
+            <div class="flex justify-between items-start">
+                <div class="flex flex-col">
+                    <span class="text-xs text-gray-500 uppercase font-bold tracking-wider mb-1">TG ID: <span class="text-gray-300 tracking-widest">${w.memo}</span></span>
+                    <span class="text-xs text-gray-500 uppercase font-bold tracking-wider mb-1">Кошелек: <span class="text-gray-300 font-mono text-[10px] break-all">${w.address}</span></span>
+                    <span class="text-lg font-mono font-black text-red-400">-${w.amount.toFixed(2)} USDT</span>
                 </div>
-                <span class=\"text-[10px] text-gray-500 shrink-0 ml-2\">${new Date(w.date).toLocaleTimeString()}</span>
+                <span class="text-[10px] text-gray-500 shrink-0 ml-2">${new Date(w.date).toLocaleTimeString()}</span>
             </div>
-            <div class=\"flex gap-2\">
-                <button data-action=\"approve-wit\" data-id=\"${w.id}\" class=\"flex-1 bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-400 border border-emerald-500/30 py-2 rounded-lg text-xs font-bold transition active:scale-95\">Выплачено</button>
-                <button data-action=\"reject-wit\" data-id=\"${w.id}\" class=\"flex-1 bg-red-600/20 hover:bg-red-600/40 text-red-400 border border-red-500/30 py-2 rounded-lg text-xs font-bold transition active:scale-95\">Отклонить</button>
+            <div class="flex gap-2">
+                <button data-action="approve-wit" data-id="${w.id}" class="flex-1 bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-400 border border-emerald-500/30 py-2 rounded-lg text-xs font-bold transition active:scale-95">Выплачено</button>
+                <button data-action="reject-wit" data-id="${w.id}" class="flex-1 bg-red-600/20 hover:bg-red-600/40 text-red-400 border border-red-500/30 py-2 rounded-lg text-xs font-bold transition active:scale-95">Отклонить</button>
             </div>
         </div>
     `).join('');
@@ -542,33 +565,33 @@ function renderAdminUsers(query = '') {
     );
 
     if(filtered.length === 0) {
-        list.innerHTML = `<div class=\"text-center text-sm text-gray-600 py-4\">Ничего не найдено</div>`;
+        list.innerHTML = `<div class="text-center text-sm text-gray-600 py-4">Ничего не найдено</div>`;
         return;
     }
 
     list.innerHTML = filtered.map(u => {
         const droneCount = u.drones ? u.drones.length : 0;
         return `
-        <div class=\"bg-gray-900 border border-gray-800 rounded-xl p-4 flex flex-col gap-2 shadow-inner\">
-            <div class=\"flex justify-between items-center border-b border-gray-800 pb-2\">
-                <div class=\"flex flex-col\">
-                    <span class=\"text-sm font-bold text-white\">${u.name} <span class=\"text-xs text-blue-400 font-normal ml-1\">${u.username || ''}</span></span>
-                    <span class=\"text-[10px] text-gray-500 font-mono tracking-widest mt-0.5\">TG ID: ${u.memo}</span>
+        <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 flex flex-col gap-2 shadow-inner">
+            <div class="flex justify-between items-center border-b border-gray-800 pb-2">
+                <div class="flex flex-col">
+                    <span class="text-sm font-bold text-white">${u.name} <span class="text-xs text-blue-400 font-normal ml-1">${u.username || ''}</span></span>
+                    <span class="text-[10px] text-gray-500 font-mono tracking-widest mt-0.5">TG ID: ${u.memo}</span>
                 </div>
-                <button data-action=\"edit-user\" data-id=\"${u.memo}\" class=\"text-[10px] uppercase font-bold tracking-wider bg-gray-800 text-gray-300 px-3 py-1.5 rounded-lg border border-gray-700 hover:bg-gray-700 transition active:scale-95\">Изменить</button>
+                <button data-action="edit-user" data-id="${u.memo}" class="text-[10px] uppercase font-bold tracking-wider bg-gray-800 text-gray-300 px-3 py-1.5 rounded-lg border border-gray-700 hover:bg-gray-700 transition active:scale-95">Изменить</button>
             </div>
-            <div class=\"grid grid-cols-3 gap-2 text-center mt-1\">
-                <div class=\"flex flex-col\">
-                    <span class=\"text-[9px] text-gray-500 uppercase font-bold\">Депозит</span>
-                    <span class=\"text-xs font-mono text-white\">${u.balance.toFixed(2)}</span>
+            <div class="grid grid-cols-3 gap-2 text-center mt-1">
+                <div class="flex flex-col">
+                    <span class="text-[9px] text-gray-500 uppercase font-bold">Депозит</span>
+                    <span class="text-xs font-mono text-white">${u.balance.toFixed(2)}</span>
                 </div>
-                <div class=\"flex flex-col border-x border-gray-800\">
-                    <span class=\"text-[9px] text-gray-500 uppercase font-bold\">Добыча</span>
-                    <span class=\"text-xs font-mono text-emerald-400\">${u.mining.toFixed(2)}</span>
+                <div class="flex flex-col border-x border-gray-800">
+                    <span class="text-[9px] text-gray-500 uppercase font-bold">Добыча</span>
+                    <span class="text-xs font-mono text-emerald-400">${u.mining.toFixed(2)}</span>
                 </div>
-                <div class=\"flex flex-col\">
-                    <span class=\"text-[9px] text-gray-500 uppercase font-bold\">Майнеров</span>
-                    <span class=\"text-xs font-mono text-blue-400\">${droneCount} шт.</span>
+                <div class="flex flex-col">
+                    <span class="text-[9px] text-gray-500 uppercase font-bold">Майнеров</span>
+                    <span class="text-xs font-mono text-blue-400">${droneCount} шт.</span>
                 </div>
             </div>
         </div>
@@ -581,7 +604,7 @@ function renderAdminUserMiners(memo) {
     if (!list) return;
     
     if (!user || !user.drones || user.drones.length === 0) {
-        list.innerHTML = `<div class=\"text-center text-xs text-gray-600 py-6\">Нет майнеров</div>`;
+        list.innerHTML = `<div class="text-center text-xs text-gray-600 py-6">Нет майнеров</div>`;
         return;
     }
     
@@ -589,16 +612,16 @@ function renderAdminUserMiners(memo) {
         const typeInfo = ADMIN_DRONE_TYPES[d.type] || { name: d.type, color: 'text-gray-300' };
         
         return `
-        <div class=\"flex justify-between items-center bg-gray-900 border border-gray-800 rounded-xl p-2.5 shadow-inner\">
-            <div class=\"flex items-center gap-3\">
-                <div class=\"w-2 h-2 rounded-full bg-current ${typeInfo.color} drop-shadow-[0_0_5px_currentColor]\"></div>
-                <div class=\"flex flex-col\">
-                    <span class=\"text-[11px] font-black uppercase tracking-wider ${typeInfo.color}\">${typeInfo.name}</span>
-                    <span class=\"text-[9px] text-gray-500 font-mono tracking-widest mt-0.5\">ID: ${d.id.substring(0,8)}</span>
+        <div class="flex justify-between items-center bg-gray-900 border border-gray-800 rounded-xl p-2.5 shadow-inner">
+            <div class="flex items-center gap-3">
+                <div class="w-2 h-2 rounded-full bg-current ${typeInfo.color} drop-shadow-[0_0_5px_currentColor]"></div>
+                <div class="flex flex-col">
+                    <span class="text-[11px] font-black uppercase tracking-wider ${typeInfo.color}">${typeInfo.name}</span>
+                    <span class="text-[9px] text-gray-500 font-mono tracking-widest mt-0.5">ID: ${d.id.substring(0,8)}</span>
                 </div>
             </div>
-            <button data-action=\"delete-miner\" data-user-id=\"${user.memo}\" data-miner-id=\"${d.id}\" class=\"w-8 h-8 flex items-center justify-center bg-red-900/20 text-red-500 hover:bg-red-800/40 hover:text-red-400 rounded-lg border border-red-900/30 transition active:scale-95\" title=\"Удалить\">
-                <svg class=\"w-4 h-4\" fill=\"none\" stroke=\"currentColor\" viewBox=\"0 0 24 24\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"2\" d=\"M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16\"></path></svg>
+            <button data-action="delete-miner" data-user-id="${user.memo}" data-miner-id="${d.id}" class="w-8 h-8 flex items-center justify-center bg-red-900/20 text-red-500 hover:bg-red-800/40 hover:text-red-400 rounded-lg border border-red-900/30 transition active:scale-95" title="Удалить">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
             </button>
         </div>
         `;
