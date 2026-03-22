@@ -9,7 +9,7 @@ const TelegramBot = require('node-telegram-bot-api');
 // ⚙️ НАСТРОЙКИ (Замените на свои данные)
 // ==========================================
 const MONGO_URI = "mongodb+srv://jamron:WV5nO1UIvofK01Nl@cluster0.ucx8kac.mongodb.net/?appName=Cluster0";
-const BOT_TOKEN = "8307131916:AAFEULs0aRsCCu7iGwBd_w49uuLwg3WUwLU"; 
+const BOT_TOKEN = "8307131916:AAGMpGiHQepF7SjMOFXcGQrc5URRrhSBC6w"; 
 const WEB_APP_URL = "https://miner-exo.onrender.com"; // Например: https://t.me/ExoMinerBot/app
 
 
@@ -55,6 +55,38 @@ const TransactionSchema = new mongoose.Schema({
 });
 
 const Transaction = mongoose.model('Transaction', TransactionSchema);
+
+// --- Схема настроек проекта ---
+const SettingsSchema = new mongoose.Schema({
+    isMaintenance: { type: Boolean, default: false },
+    depositsEnabled: { type: Boolean, default: true },
+    withdrawsEnabled: { type: Boolean, default: true },
+    refLvl1: { type: Number, default: 7 },
+    refLvl2: { type: Number, default: 5 },
+    rates: {
+        FREE: { type: Number, default: 0.05 },
+        COMMON: { type: Number, default: 0.20 },
+        UNCOMMON: { type: Number, default: 0.75 },
+        RARE: { type: Number, default: 2.50 },
+        EPIC: { type: Number, default: 8.00 },
+        LEGENDARY: { type: Number, default: 30.00 }
+    }
+});
+const Settings = mongoose.model('Settings', SettingsSchema);
+
+// Инициализация настроек по умолчанию, если их нет
+async function initSettings() {
+    try {
+        const settings = await Settings.findOne();
+        if (!settings) {
+            await new Settings().save();
+            console.log('⚙️ Созданы настройки по умолчанию');
+        }
+    } catch (e) {
+        console.error('Ошибка инициализации настроек:', e);
+    }
+}
+initSettings();
 
 // ==========================================
 // 2. TELEGRAM БОТ (Обработка команды /start)
@@ -224,6 +256,31 @@ app.post('/api/user/convert', async (req, res) => {
     }
 });
 
+// --- ЭНДПОИНТЫ ДЛЯ НАСТРОЕК (ПУБЛИЧНЫЕ И АДМИНСКИЕ) ---
+
+app.get('/api/settings', async (req, res) => {
+    try {
+        const settings = await Settings.findOne();
+        res.json(settings || new Settings());
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.post('/api/admin/settings', async (req, res) => {
+    try {
+        let settings = await Settings.findOne();
+        if (!settings) settings = new Settings();
+        
+        Object.assign(settings, req.body);
+        await settings.save();
+        
+        res.json({ success: true, settings });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // --- ЭНДПОИНТЫ ДЛЯ АДМИНКИ ---
 
 // Получить все данные для дашборда
@@ -273,14 +330,15 @@ app.post('/api/admin/transaction', async (req, res) => {
 
                 // Реферальные выплаты
                 if (user.referrerTgId) {
-                    const lvl1Bonus = parseFloat((tx.amount * 0.07).toFixed(4));
+                    const settings = await Settings.findOne() || new Settings();
+                    const lvl1Bonus = parseFloat((tx.amount * (settings.refLvl1 / 100)).toFixed(4));
                     await User.updateOne(
                         { tgId: user.referrerTgId },
                         { $inc: { depositBalance: lvl1Bonus, referralProfit: lvl1Bonus } }
                     );
                 }
                 if (user.referrerLvl2TgId) {
-                    const lvl2Bonus = parseFloat((tx.amount * 0.05).toFixed(4));
+                    const lvl2Bonus = parseFloat((tx.amount * (settings.refLvl2 / 100)).toFixed(4));
                     await User.updateOne(
                         { tgId: user.referrerLvl2TgId },
                         { $inc: { depositBalance: lvl2Bonus, referralProfit: lvl2Bonus } }
