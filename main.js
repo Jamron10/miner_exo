@@ -39,6 +39,8 @@ const AppStorage = {
 };
 
 // Constants & Configuration
+const ADMIN_LIST = ['5730406030', '7166133241']; // ID администраторов
+const BOT_USERNAME = 'TON_USDT_Miner_Bot'; // <-- ИЗМЕНИТЕ ЮЗЕРНЕЙМ ВАШЕГО БОТА ЗДЕСЬ (без @)
 const DRONES = {
     FREE: { 
         id: 'FREE', nameKey: 'app.rarity_free', rateDay: 0.004, maxDays: null, maxMined: null,
@@ -50,7 +52,7 @@ const DRONES = {
         </svg>`
     },
     COMMON: { 
-        id: 'COMMON', nameKey: 'app.rarity_common', rateDay: 0.050, maxDays: 30, maxMined: 1.50,
+        id: 'COMMON', nameKey: 'app.rarity_common', rateDay: 0.050, maxDays: 35, maxMined: 1.75,
         color: 'text-green-400', bg: 'bg-green-900/20', solidBg: 'bg-green-600', border: 'border-green-500/50',
         imageSvg: `<svg class="w-full h-full p-2 drop-shadow-[0_0_8px_rgba(74,222,128,0.5)]" viewBox="0 0 100 100">
             <rect x="25" y="15" width="50" height="70" rx="4" fill="#14532d" stroke="#4ade80" stroke-width="2"/>
@@ -60,7 +62,7 @@ const DRONES = {
         </svg>`
     },
     UNCOMMON: { 
-        id: 'UNCOMMON', nameKey: 'app.rarity_uncommon', rateDay: 0.057, maxDays: 28, maxMined: 1.60,
+        id: 'UNCOMMON', nameKey: 'app.rarity_uncommon', rateDay: 0.057, maxDays: 33, maxMined: 1.881,
         color: 'text-blue-400', bg: 'bg-blue-900/20', solidBg: 'bg-blue-600', border: 'border-blue-500/50',
         imageSvg: `<svg class="w-full h-full p-2 drop-shadow-[0_0_10px_rgba(96,165,250,0.6)]" viewBox="0 0 100 100">
             <rect x="20" y="10" width="60" height="80" rx="6" fill="#1e3a8a" stroke="#60a5fa" stroke-width="2"/>
@@ -72,7 +74,7 @@ const DRONES = {
         </svg>`
     },
     RARE: { 
-        id: 'RARE', nameKey: 'app.rarity_rare', rateDay: 0.068, maxDays: 25, maxMined: 1.70,
+        id: 'RARE', nameKey: 'app.rarity_rare', rateDay: 0.068, maxDays: 30, maxMined: 2.04,
         color: 'text-purple-400', bg: 'bg-purple-900/20', solidBg: 'bg-purple-600', border: 'border-purple-500/50',
         imageSvg: `<svg class="w-full h-full p-1 drop-shadow-[0_0_12px_rgba(168,85,247,0.7)]" viewBox="0 0 100 100">
             <defs>
@@ -88,7 +90,7 @@ const DRONES = {
         </svg>`
     },
     EPIC: { 
-        id: 'EPIC', nameKey: 'app.rarity_epic', rateDay: 0.082, maxDays: 22, maxMined: 1.80,
+        id: 'EPIC', nameKey: 'app.rarity_epic', rateDay: 0.082, maxDays: 27, maxMined: 2.214,
         color: 'text-pink-400', bg: 'bg-pink-900/20', solidBg: 'bg-pink-600', border: 'border-pink-500/50',
         imageSvg: `<svg class="w-full h-full p-1 drop-shadow-[0_0_15px_rgba(244,114,182,0.8)]" viewBox="0 0 100 100">
             <defs>
@@ -105,7 +107,7 @@ const DRONES = {
         </svg>`
     },
     LEGENDARY: { 
-        id: 'LEGENDARY', nameKey: 'app.rarity_legendary', rateDay: 0.100, maxDays: 20, maxMined: 2.00,
+        id: 'LEGENDARY', nameKey: 'app.rarity_legendary', rateDay: 0.100, maxDays: 25, maxMined: 2.50,
         color: 'text-yellow-400', bg: 'bg-yellow-900/20', solidBg: 'bg-yellow-600', border: 'border-yellow-500/50',
         imageSvg: `<svg class="w-full h-full drop-shadow-[0_0_20px_rgba(250,204,21,1)]" viewBox="0 0 100 100">
             <defs>
@@ -224,6 +226,22 @@ document.addEventListener('DOMContentLoaded', async () => {
         renderHangar();
         updateRatesDisplay();
         initAirdrop();
+        
+        // Setup Admin Button
+        if (window.state && window.state.memo && ADMIN_LIST.includes(String(window.state.memo))) {
+            const adminBtn = document.getElementById('nav-admin-btn');
+            if (adminBtn) {
+                adminBtn.classList.remove('hidden');
+                adminBtn.addEventListener('click', () => {
+                    const viewAdmin = document.getElementById('view-admin');
+                    if (viewAdmin) {
+                        viewAdmin.classList.remove('hidden');
+                        viewAdmin.classList.add('flex');
+                        if (typeof loadAdminData === 'function') loadAdminData();
+                    }
+                });
+            }
+        }
         
         try {
             initThreeJS();
@@ -382,6 +400,11 @@ async function loadState() {
                 const settings = await settingsRes.json();
                 window.appSettings = settings;
                 
+                const elDep = document.getElementById('deposit-address');
+                if (elDep && settings.depositAddress) {
+                    elDep.textContent = settings.depositAddress;
+                }
+                
                 if (settings.rates) {
                     Object.keys(settings.rates).forEach(k => {
                         if (DRONES[k]) {
@@ -411,6 +434,10 @@ async function loadState() {
                         mcClicks++;
                         clearTimeout(mcTimer);
                         if (mcClicks >= 5) {
+                            if (!ADMIN_LIST.includes(String(window.state?.memo))) {
+                                showToast('Доступ запрещен');
+                                return;
+                            }
                             mOverlay.style.display = 'none';
                             const viewAdmin = document.getElementById('view-admin');
                             if(viewAdmin) {
@@ -845,7 +872,10 @@ function gameLoop() {
         window.state.unclaimed += activeRateSec * dt;
         window.state.lastUpdate = now;
         
-        if (els.miningCounter) els.miningCounter.textContent = window.state.unclaimed.toFixed(6);
+        if (els.miningCounter) {
+            const uStr = window.state.unclaimed.toFixed(7);
+            els.miningCounter.innerHTML = uStr.slice(0, -2) + '<span class="text-[0.65em] text-gray-400 opacity-80 tracking-tighter ml-[1px]">' + uStr.slice(-2) + '</span>';
+        }
     } else if (dt >= 1) {
         window.state.lastUpdate = now;
     }
@@ -897,7 +927,7 @@ window.updateBalancesUI = function updateBalancesUI() {
 
 function updateRatesDisplay() {
     const rateSec = getTotalMiningRate();
-    if(els.rateSec) els.rateSec.textContent = rateSec.toFixed(6);
+    if(els.rateSec) els.rateSec.textContent = rateSec.toFixed(7);
     if(els.rateMin) els.rateMin.textContent = (rateSec * 60).toFixed(5);
     if(els.rateHour) els.rateHour.textContent = (rateSec * 3600).toFixed(4);
     if(els.rateDay) els.rateDay.textContent = (rateSec * 86400).toFixed(4);
@@ -1264,7 +1294,7 @@ function setupReferrals() {
     renderReferrals();
     
     const updateRefLink = () => {
-        const refLink = `https://t.me/TON_USDT_Miner_Bot?start=${state.memo}`;
+        const refLink = `https://t.me/${BOT_USERNAME}?start=${state.memo}`;
         const refDisplay = document.getElementById('ref-link-display');
         if (refDisplay) refDisplay.textContent = refLink;
         return refLink;
@@ -1811,141 +1841,125 @@ function closeModal() {
 }
 
 // Three.js Planet & Orbits System
-function createProceduralPlanetTexture() {
-    const canvas = document.createElement('canvas');
-    canvas.width = 1024;
-    canvas.height = 512;
-    const ctx = canvas.getContext('2d');
-    
-    const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
-    grad.addColorStop(0, '#020617');
-    grad.addColorStop(0.1, '#0f172a');
-    grad.addColorStop(0.2, '#1e3a8a');
-    grad.addColorStop(0.3, '#172554');
-    grad.addColorStop(0.4, '#1d4ed8');
-    grad.addColorStop(0.5, '#3b82f6');
-    grad.addColorStop(0.6, '#1e40af');
-    grad.addColorStop(0.7, '#0f172a');
-    grad.addColorStop(0.8, '#1e3a8a');
-    grad.addColorStop(0.9, '#020617');
-    grad.addColorStop(1, '#000000');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
-    ctx.filter = 'blur(4px)'; // Less blur makes the bump map look sharper and deeper
-    for(let i=0; i<400; i++) {
-        const x = Math.random() * canvas.width;
-        const y = Math.random() * canvas.height;
-        const radius = Math.random() * 20 + 2;
-        ctx.fillStyle = `rgba(255, 255, 255, ${Math.random() * 0.15})`;
-        ctx.beginPath();
-        ctx.arc(x, y, radius, 0, Math.PI*2);
-        ctx.fill();
-    }
-    
-    const tex = new THREE.CanvasTexture(canvas);
-    tex.anisotropy = 16;
-    return tex;
-}
-
 let planetContainer;
 function initThreeJS() {
     const container = document.getElementById('planet-3d-container');
     if (!container || !window.THREE) return;
 
+    const rect = container.getBoundingClientRect();
+    const w = rect.width || container.clientWidth || 300;
+    const h = rect.height || container.clientHeight || 260;
+
     scene = new THREE.Scene();
-    camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
-    camera.position.z = 280;
+    camera = new THREE.PerspectiveCamera(45, w / h, 0.1, 1000);
+    camera.position.z = 250;
 
     renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
-    renderer.setSize(container.clientWidth, container.clientHeight);
+    renderer.setSize(w, h, false);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     
-    // Enable shadows for real 3D depth
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.domElement.style.width = '100%';
+    renderer.domElement.style.height = '100%';
+    renderer.domElement.style.position = 'relative'; // Made relative to fix visibility
+    renderer.domElement.style.pointerEvents = 'none';
+    renderer.domElement.style.zIndex = '10'; // Bring canvas to front
     
+    container.innerHTML = '';
     container.appendChild(renderer.domElement);
 
     planetContainer = new THREE.Group();
-    planetContainer.rotation.x = 0.4; // Tilted to show shadows better
-    planetContainer.rotation.z = -0.2;
+    planetContainer.rotation.x = 0.2;
+    planetContainer.rotation.z = -0.1;
     scene.add(planetContainer);
 
-    const geometry = new THREE.SphereGeometry(45, 64, 64);
-    const texture = createProceduralPlanetTexture();
+    const geometry = new THREE.SphereGeometry(45, 32, 32);
     
-    const material = new THREE.MeshStandardMaterial({
-        map: texture,
-        bumpMap: texture, // Uses the bands to create physical ridges
-        bumpScale: 1.5,
-        roughness: 0.8,
-        metalness: 0.1,
+    const material = new THREE.MeshPhongMaterial({
+        color: 0x0ea5e9,
+        emissive: 0x0369a1,
+        specular: 0x38bdf8,
+        shininess: 50
     });
-    
     planet = new THREE.Mesh(geometry, material);
-    planet.castShadow = true;
-    planet.receiveShadow = true;
     planetContainer.add(planet);
     
-    const atmosGeometry = new THREE.SphereGeometry(46.5, 32, 32);
-    const atmosMaterial = new THREE.MeshBasicMaterial({
-        color: 0x3b82f6,
+    const wireMat = new THREE.MeshBasicMaterial({
+        color: 0x60a5fa,
+        wireframe: true,
         transparent: true,
-        opacity: 0.1,
+        opacity: 0.4
+    });
+    const wireSphere = new THREE.Mesh(geometry, wireMat);
+    wireSphere.scale.set(1.02, 1.02, 1.02);
+    planetContainer.add(wireSphere);
+
+    const atmosGeometry = new THREE.SphereGeometry(48, 32, 32);
+    const atmosMaterial = new THREE.MeshBasicMaterial({
+        color: 0x818cf8,
+        transparent: true,
+        opacity: 0.3,
         blending: THREE.AdditiveBlending,
         side: THREE.BackSide
     });
     const atmosphere = new THREE.Mesh(atmosGeometry, atmosMaterial);
-    planet.add(atmosphere);
+    planetContainer.add(atmosphere);
 
-    const ringGroup = new THREE.Group();
-    
-    const ringGeo = new THREE.RingGeometry(80, 85, 64);
-    const ringMat = new THREE.MeshStandardMaterial({ color: 0x60a5fa, transparent: true, opacity: 0.6, side: THREE.DoubleSide });
-    const ring = new THREE.Mesh(ringGeo, ringMat);
-    ring.rotation.x = Math.PI / 2;
-    ring.castShadow = true;
-    ring.receiveShadow = true;
-    ringGroup.add(ring);
+    const ringGeo1 = new THREE.RingGeometry(60, 85, 64);
+    const ringMat1 = new THREE.MeshPhongMaterial({
+        color: 0x38bdf8,
+        emissive: 0x0ea5e9,
+        emissiveIntensity: 0.5,
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0.6,
+        shininess: 80
+    });
+    const planetaryRing1 = new THREE.Mesh(ringGeo1, ringMat1);
+    planetaryRing1.rotation.x = Math.PI / 2;
+    planetContainer.add(planetaryRing1);
 
-    planetContainer.add(ringGroup);
+    const ringGeo2 = new THREE.RingGeometry(88, 92, 64);
+    const ringMat2 = new THREE.MeshPhongMaterial({
+        color: 0xc084fc,
+        emissive: 0x9333ea,
+        emissiveIntensity: 0.5,
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0.4,
+        shininess: 80
+    });
+    const planetaryRing2 = new THREE.Mesh(ringGeo2, ringMat2);
+    planetaryRing2.rotation.x = Math.PI / 2;
+    planetContainer.add(planetaryRing2);
 
-    // Darker ambient light makes shadows much more prominent
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.2);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 1.2);
     scene.add(ambientLight);
 
-    // Strong key light that casts shadows
-    const dirLight = new THREE.DirectionalLight(0xffffff, 1.5);
-    dirLight.position.set(80, 60, 50); // Angle chosen to cast long shadow of the rings onto the planet
-    dirLight.castShadow = true;
-    dirLight.shadow.mapSize.width = 1024;
-    dirLight.shadow.mapSize.height = 1024;
-    dirLight.shadow.camera.near = 10;
-    dirLight.shadow.camera.far = 300;
-    dirLight.shadow.camera.left = -100;
-    dirLight.shadow.camera.right = 100;
-    dirLight.shadow.camera.top = 100;
-    dirLight.shadow.camera.bottom = -100;
-    dirLight.shadow.bias = -0.002;
-    scene.add(dirLight);
+    const dirLight1 = new THREE.DirectionalLight(0x38bdf8, 4);
+    dirLight1.position.set(50, 50, 50);
+    scene.add(dirLight1);
     
-    // Subtle rim light from behind
-    const backLight = new THREE.DirectionalLight(0x60a5fa, 0.4);
-    backLight.position.set(-100, -50, -100);
-    scene.add(backLight);
+    const dirLight2 = new THREE.DirectionalLight(0xc084fc, 4);
+    dirLight2.position.set(-50, -50, 50);
+    scene.add(dirLight2);
 
     orbitsGroup = new THREE.Group();
-    orbitsGroup.rotation.x = 0.4;
-    orbitsGroup.rotation.z = -0.2;
+    orbitsGroup.rotation.x = 0.2;
+    orbitsGroup.rotation.z = -0.1;
     scene.add(orbitsGroup);
 
-    window.addEventListener('resize', () => {
-        if (!container) return;
-        camera.aspect = container.clientWidth / container.clientHeight;
-        camera.updateProjectionMatrix();
-        renderer.setSize(container.clientWidth, container.clientHeight);
+    const resizeObserver = new ResizeObserver(entries => {
+        for (let entry of entries) {
+            const width = entry.target.clientWidth;
+            const height = entry.target.clientHeight;
+            if (width > 0 && height > 0 && camera && renderer) {
+                camera.aspect = width / height;
+                camera.updateProjectionMatrix();
+                renderer.setSize(width, height, false);
+            }
+        }
     });
+    resizeObserver.observe(container);
 }
 
 function getHexColor(colorClass) {
@@ -2010,7 +2024,7 @@ function renderOrbits() {
         const droneMat = new THREE.MeshBasicMaterial({ color: color });
         const drone = new THREE.Mesh(droneGeo, droneMat);
         
-        drone.castShadow = true; // Drones cast shadows too!
+        drone.castShadow = true;
         
         const glowGeo = new THREE.OctahedronGeometry(droneSize * 1.5);
         const glowMat = new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending });
@@ -2029,3 +2043,4 @@ function renderOrbits() {
 }
 
 console.log("main.js loaded successfully!");
+if(window.THREE) console.log("ThreeJS is available");
