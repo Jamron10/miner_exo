@@ -403,7 +403,7 @@ app.post('/api/admin/user', isAdmin, async (req, res) => {
 });
 
 // Запуск сервера
-const PORT = process.env.PORT || 3000;
+const PORT = 3000;
 app.listen(PORT, () => {
   console.log(`🚀 Сервер API запущен на порту ${PORT}`);
   console.log(`🤖 Telegram-бот запущен и ожидает сообщений...`);
